@@ -92,6 +92,7 @@ export interface OrganizationType extends OrganizationBasicType {
     teams: TeamBasicType[] | null
     available_features: AvailableFeatures[]
     domain_whitelist: string[]
+    is_member_join_email_enabled: boolean
 }
 
 export interface OrganizationMemberType {
@@ -226,6 +227,12 @@ export enum PropertyOperator {
     LessThan = 'lt',
     IsSet = 'is_set',
     IsNotSet = 'is_not_set',
+}
+
+export enum SavedInsightsParamOptions {
+    All = 'all',
+    Yours = 'yours',
+    Favorites = 'favorites',
 }
 
 /** Sync with plugin-server/src/types.ts */
@@ -463,6 +470,7 @@ export interface DashboardItemType {
     is_sample: boolean
     dashboard: number
     result: any | null
+    updated_at: string
 }
 
 export interface DashboardType {
@@ -621,7 +629,7 @@ export interface FilterType {
     actions?: Record<string, any>[]
     breakdown_type?: BreakdownType | null
     breakdown?: string | number | number[] | null
-    breakdown_value?: string
+    breakdown_value?: string | number
     shown_as?: ShownAsType
     session?: string
     period?: string
@@ -735,8 +743,8 @@ export interface FunnelStep {
     people?: string[]
     type: EntityType
     labels?: string[]
-    breakdown?: string
-    breakdown_value?: string
+    breakdown?: string | number | number[]
+    breakdown_value?: string | number
 }
 
 export interface FunnelStepWithNestedBreakdown extends FunnelStep {

@@ -9,14 +9,15 @@ import { ActionFilter, FilterType, ViewType, FunnelVizType } from '~/types'
 import { personsModalLogicType } from './personsModalLogicType'
 import { parsePeopleParams, TrendPeople } from './trendsLogic'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
+import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 
-interface PersonModalParams {
+export interface PersonModalParams {
     action: ActionFilter | 'session' // todo, refactor this session string param out
     label: string // Contains the step name
     date_from: string | number
     date_to: string | number
     filters: Partial<FilterType>
-    breakdown_value?: string
+    breakdown_value?: string | number
     saveOriginal?: boolean
     searchTerm?: string
     funnelStep?: number
@@ -171,9 +172,13 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                     next: people.next,
                     funnelStep,
                 } as TrendPeople
+
+                eventUsageLogic.actions.reportPersonModalViewed(peopleParams, peopleResult.count, !!people.next)
+
                 if (saveOriginal) {
                     actions.saveFirstLoadedPeople(peopleResult)
                 }
+
                 return peopleResult
             },
             loadMorePeople: async ({}, breakpoint) => {

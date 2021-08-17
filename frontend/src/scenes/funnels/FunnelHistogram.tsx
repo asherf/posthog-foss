@@ -22,7 +22,7 @@ export function FunnelHistogramHeader(): JSX.Element | null {
     }
 
     return (
-        <div className="funnel-header-steps">
+        <div className="funnel-header-steps" style={{ marginLeft: 'auto' }}>
             <span className="funnel-header-steps-label">Steps</span>
             {histogramStepsDropdown.length > 0 && stepsWithCount.length > 0 && (
                 <Select
@@ -36,7 +36,7 @@ export function FunnelHistogramHeader(): JSX.Element | null {
                     optionLabelProp="label"
                 >
                     {histogramStepsDropdown.map((option, i) => {
-                        const basisStep = getReferenceStep(stepsWithCount, stepReference, i)
+                        const basisStep = getReferenceStep(stepsWithCount, stepReference, i) // should only return steps[0] until stepReference toggle is implemented for conversion
                         return (
                             <Select.Option key={option.from_step} value={option.from_step} label={<>{option?.label}</>}>
                                 <Col style={{ minWidth: 300 }}>
@@ -48,7 +48,7 @@ export function FunnelHistogramHeader(): JSX.Element | null {
                                     </Row>
                                     <Row className="text-muted-alt">
                                         Total conversion rate:{' '}
-                                        {formatDisplayPercentage(option.count ?? 0 / basisStep.count)}%
+                                        {formatDisplayPercentage((option.count ?? 0) / basisStep.count)}%
                                     </Row>
                                 </Col>
                             </Select.Option>

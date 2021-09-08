@@ -25,7 +25,9 @@ style files without adding already imported styles. */
     --text-light: #{$text_light};
     --muted: #{$text_muted};
     --muted-alt: #{$text_muted_alt};
+    --border-light: #{$border_light};
     --border: #{$border};
+    --border-dark: #{$border_dark};
     // Used for graph series
     --blue: #{$blue_500};
     --purple: #{$purple_500};
@@ -216,6 +218,16 @@ code.code {
     margin-left: $default_spacing * 0.25;
 }
 
+.mx-0 {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+.my-0 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
 .pa {
     // Padding all
     padding: $default_spacing;
@@ -396,7 +408,7 @@ code.code {
 }
 
 .card-elevated {
-    @extend .mixin-elevated;
+    @extend %mixin-elevated;
 }
 
 // Form & input styles

@@ -36,3 +36,9 @@ storybook-static
 ee/benchmarks/results
 plugin-server/src/config/idl/protos.*
 
+
+# Pants workspace files
+/.pants.d/
+/dist/
+/.pids
+/.pants.workdir.file_lock*

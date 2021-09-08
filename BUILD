@@ -1,3 +1,5 @@
+python_requirements(requirements_relpath="requirements.in")
+
 pex_binary(
     name="docker-compose-config",
     entry_point="docker-compose-config.py",

@@ -1,0 +1,72 @@
+name: Docker FOSS publish toolchain
+
+on: [push]
+
+jobs:
+    build-push:
+        name: Build & push Docker release image
+        runs-on: ubuntu-20.04
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+            - uses: actions/cache@v2
+              id: cache
+              with:
+                  path: |
+                      ~/.cache/pants/setup
+                      ~/.cache/pants/lmdb_store
+                      ~/.cache/pants/named_caches
+                  key: ${{ runner.os }}-
+            - name: Get yarn cache directory path
+              id: yarn-cache-dir-path
+              run: echo "::set-output name=dir::$(yarn cache dir)"
+            - uses: actions/cache@v2
+              id: yarn-cache
+              with:
+                  path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+                  key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+            - name: Update git SHA
+              run: echo "GIT_SHA = '${GITHUB_SHA}'" > posthog/gitsha.py
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v1
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v1
+
+            # - name: Log in to registry
+            #   run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            - name: Log in to the Container registry
+              # uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+              uses: docker/login-action@v1.10.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+            # - name: Extract metadata (tags, labels) for Docker
+            #   id: meta
+            #   uses: docker/metadata-action@v3.6.0
+            #   with:
+            #       images: ghcr.io/asherf/toolchain-posthog-foss
+            - name: prep pex and frontend
+              run: |
+                  ./toolchain/prod/docker/web/prep-build-web-ci.sh
+                  find frontend/dist -name "*.css"
+                  find frontend/dist -name "*.svg"
+            - name: Upload pants log
+              uses: actions/upload-artifact@v2
+              with:
+                  name: pants-log
+                  path: .pants.d/pants.log
+              if: always() # We want the log even on failures.
+            - name: Build and push Docker image
+              id: container-release
+              uses: docker/build-push-action@v2
+              with:
+                  context: ./toolchain/prod/docker/web
+                  file: toolchain/prod/docker/web/Dockerfile.web
+                  push: true
+                  # tags: ${{ steps.meta.outputs.tags }}
+                  tags: ghcr.io/asherf/toolchain-posthog-foss:ls0
+                  # labels: ${{ steps.meta.outputs.labels }}
+            # - name: Image digest
+            #   run: |
+            #       echo "Pushed release: ${{ steps.container-release.outputs.digest }}"

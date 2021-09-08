@@ -20,7 +20,7 @@ services:
             DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
             REDIS_URL: redis://redis:6379/
             SECRET_KEY: <randomly generated secret key>
-        image: posthog/posthog:latest
+        image: ghcr.io/asherf/toolchain-posthog-foss:pants-manual-for-toolchain
         links:
             - db:db
             - redis:redis

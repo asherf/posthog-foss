@@ -1,0 +1,12 @@
+python_sources(
+  dependencies=[
+    "//:whitenoise",
+    "//:django-loginas",
+    "//:django-cors-headers",
+    "//:social-auth-app-django",
+    "//:social-auth-core",
+    "//:django-axes",
+    "//:django-rest-hooks",
+    "//:setuptools"
+  ]
+)

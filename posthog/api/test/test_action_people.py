@@ -561,7 +561,7 @@ def action_people_test_factory(event_factory, person_factory, action_factory, co
                     ENTITY_ID: "watched movie",
                     "display": "ActionsLineGraphCumulative",
                     "entity_math": "dau",
-                    "events": [{"id": "watched movie", "math": "dau"}],
+                    "events": json.dumps([{"id": "watched movie", "math": "dau"}]),
                 },
             )
             resp = people.content.decode("utf-8").split("\r\n")
@@ -629,6 +629,7 @@ def action_people_test_factory(event_factory, person_factory, action_factory, co
                     "date_to": "2020-01-07",
                     ENTITY_TYPE: "events",
                     ENTITY_ID: "watched movie",
+                    "properties": json.dumps([{"key": "name", "value": "person3", "type": "person"}]),
                     "breakdown_type": "person",
                     "breakdown_value": "person3",
                     "breakdown": "name",
@@ -648,6 +649,7 @@ def action_people_test_factory(event_factory, person_factory, action_factory, co
                     "date_to": "2020-01-07",
                     ENTITY_TYPE: "events",
                     ENTITY_ID: "watched movie",
+                    "properties": json.dumps([{"key": "event_prop", "value": "prop1", "type": "event"}]),
                     "breakdown_type": "event",
                     "breakdown_value": "prop1",
                     "breakdown": "event_prop",

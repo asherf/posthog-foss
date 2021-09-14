@@ -22,7 +22,6 @@ import {
     KeyOutlined,
     SmileOutlined,
 } from '@ant-design/icons'
-import { guardPremiumFeature } from 'scenes/UpgradeModal'
 import { sceneLogic, urls } from 'scenes/sceneLogic'
 import { CreateProjectModal } from 'scenes/project/CreateProjectModal'
 import { CreateOrganizationModal } from 'scenes/organization/CreateOrganizationModal'
@@ -31,7 +30,7 @@ import { commandPaletteLogic } from 'lib/components/CommandPalette/commandPalett
 import { Link } from 'lib/components/Link'
 import { LinkButton } from 'lib/components/LinkButton'
 import { BulkInviteModal } from 'scenes/organization/Settings/BulkInviteModal'
-import { UserType } from '~/types'
+import { AvailableFeature, UserType } from '~/types'
 import { CreateInviteModalWithButton } from 'scenes/organization/Settings/CreateInviteModal'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { billingLogic } from 'scenes/billing/billingLogic'
@@ -75,7 +74,7 @@ export function TopNavigation(): JSX.Element {
     const { preflight } = useValues(preflightLogic)
     const { billing } = useValues(billingLogic)
     const { logout, updateCurrentTeam, updateCurrentOrganization } = useActions(userLogic)
-    const { showUpgradeModal } = useActions(sceneLogic)
+    const { guardAvailableFeature } = useActions(sceneLogic)
     const { sceneConfig } = useValues(sceneLogic)
     const { push } = router.actions
     const { showPalette } = useActions(commandPaletteLogic)
@@ -173,11 +172,8 @@ export function TopNavigation(): JSX.Element {
                         type="button"
                         className="plain-button"
                         onClick={() =>
-                            guardPremiumFeature(
-                                user,
-                                preflight,
-                                showUpgradeModal,
-                                'organizations_projects',
+                            guardAvailableFeature(
+                                AvailableFeature.ORGANIZATIONS_PROJECTS,
                                 'multiple organizations',
                                 'Organizations group people building products together. An organization can then have multiple projects.',
                                 () => {
@@ -246,11 +242,8 @@ export function TopNavigation(): JSX.Element {
                 type="button"
                 className="plain-button"
                 onClick={() =>
-                    guardPremiumFeature(
-                        user,
-                        preflight,
-                        showUpgradeModal,
-                        'organizations_projects',
+                    guardAvailableFeature(
+                        AvailableFeature.ORGANIZATIONS_PROJECTS,
                         'multiple projects',
                         'Projects allow you to separate data and configuration for different products or environments.',
                         () => {

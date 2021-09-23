@@ -32,3 +32,9 @@ docker-compose.prod.yml
 *.isorted
 build-storybook.log
 storybook-static
+
+# Pants workspace files
+/.pants.d/
+/dist/
+/.pids
+/.pants.workdir.file_lock*

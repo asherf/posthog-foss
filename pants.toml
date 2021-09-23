@@ -1,0 +1,10 @@
+[GLOBAL]
+pants_version = "2.8.0.dev2"
+backend_packages = ["pants.backend.python"]
+
+
+ [anonymous-telemetry]
+ enabled = false
+
+[python-infer]
+string_imports = true

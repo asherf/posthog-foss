@@ -15,7 +15,6 @@ import {
 } from 'lib/constants'
 import { PluginConfigSchema } from '@posthog/plugin-scaffold'
 import { PluginInstallationType } from 'scenes/plugins/types'
-import { Dayjs } from 'dayjs'
 import { PROPERTY_MATCH_TYPE } from 'lib/constants'
 import { UploadFile } from 'antd/lib/upload/interface'
 
@@ -350,6 +349,7 @@ export type EntityType = 'actions' | 'events' | 'new_entity'
 export interface Entity {
     id: string | number
     name: string
+    custom_name?: string
     order: number
     type: EntityType
 }
@@ -364,6 +364,7 @@ export type EntityFilter = {
     type?: EntityType
     id: Entity['id'] | null
     name: string | null
+    custom_name?: string
     index?: number
     order?: number
 }
@@ -371,10 +372,6 @@ export type EntityFilter = {
 export interface FunnelStepRangeEntityFilter extends EntityFilter {
     funnel_from_step: number
     funnel_to_step: number
-}
-
-export interface EntityWithProperties extends Entity {
-    properties: Record<string, any>
 }
 
 export interface PersonType {
@@ -442,6 +439,7 @@ export enum StepOrderValue {
 export enum PersonsTabType {
     EVENTS = 'events',
     SESSIONS = 'sessions',
+    SESSION_RECORDINGS = 'sessionRecordings',
 }
 
 export enum LayoutView {
@@ -449,19 +447,24 @@ export enum LayoutView {
     List = 'list',
 }
 
+export interface EventsTableAction {
+    name: string
+    id: string
+}
+
 export interface EventType {
     elements: ElementType[]
     elements_hash: string | null
-    event: string
     id: number | string
     properties: Record<string, any>
     timestamp: string
     person?: Partial<PersonType> | null
+    event: string
 }
 
-export interface EventFormattedType {
-    event: EventType
-    date_break?: Dayjs
+export interface EventsTableRowItem {
+    event?: EventType
+    date_break?: string
     new_events?: boolean
 }
 
@@ -488,6 +491,8 @@ export interface SessionRecordingType {
     start_time: string
     /** When the recording ends in ISO format. */
     end_time: string
+    distinct_id?: string
+    email?: string
 }
 
 export interface BillingType {
@@ -687,6 +692,12 @@ export enum PathType {
     CustomEvent = 'custom_event',
 }
 
+export enum FunnelPathType {
+    before = 'funnel_path_before_step',
+    between = 'funnel_path_between_steps',
+    after = 'funnel_path_after_step',
+}
+
 export enum FunnelVizType {
     Steps = 'steps',
     TimeToConvert = 'time_to_convert',
@@ -717,7 +728,10 @@ export interface FilterType {
     returning_entity?: Record<string, any>
     target_entity?: Record<string, any>
     path_type?: PathType
-    start_point?: string | number
+    include_event_types?: PathType[]
+    start_point?: string
+    end_point?: string
+    path_groupings?: string[]
     stickiness_days?: number
     type?: EntityType
     entity_id?: string | number
@@ -743,6 +757,13 @@ export interface FilterType {
     funnel_order_type?: StepOrderValue
     exclusions?: FunnelStepRangeEntityFilter[] // used in funnel exclusion filters
     hiddenLegendKeys?: Record<string, boolean | undefined> // used to toggle visibility of breakdowns with legend
+    exclude_events?: string[] // Paths Exclusion type
+    step_limit?: number // Paths Step Limit
+    funnel_filter?: Record<string, any> // Funnel Filter used in Paths
+    funnel_paths?: FunnelPathType
+    edge_limit?: number | undefined // Paths edge limit
+    min_edge_weight?: number | undefined // Paths
+    max_edge_weight?: number | undefined // Paths
 }
 
 export interface SystemStatusSubrows {
@@ -839,6 +860,7 @@ export interface FunnelStep {
     average_conversion_time: number | null
     count: number
     name: string
+    custom_name?: string
     order: number
     people?: string[]
     type: EntityType
@@ -1169,3 +1191,9 @@ export interface AppContext {
 }
 
 export type StoredMetricMathOperations = 'max' | 'min' | 'sum'
+
+export interface PathEdgeParameters {
+    edge_limit?: number | undefined
+    min_edge_weight?: number | undefined
+    max_edge_weight?: number | undefined
+}

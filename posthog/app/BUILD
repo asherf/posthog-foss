@@ -1,0 +1,6 @@
+python_library()
+
+pex_binary(
+    name="gunicorn-app",
+    entry_point="gunicorn_main.py",
+)

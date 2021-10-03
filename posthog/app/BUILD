@@ -1,4 +1,8 @@
-python_library()
+python_library(
+    dependencies=[
+        "posthog"
+    ]
+)
 
 pex_binary(
     name="gunicorn-app",

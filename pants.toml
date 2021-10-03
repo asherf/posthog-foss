@@ -7,3 +7,6 @@ enabled = false
 
 [source]
 root_patterns = ['/']
+
+[python-setup]
+interpreter_constraints = ["CPython>=3.8,<3.9"]

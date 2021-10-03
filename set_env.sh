@@ -3,3 +3,4 @@
 #export REDIS_URL=redis://localhost/
 # export SECRET_KEY=infkjklsdjflk9fdsfu0sdfdfn
 #  docker run -p 6379:6379  -it redis:6-alpine
+#./pants run posthog/app:gunicorn-app

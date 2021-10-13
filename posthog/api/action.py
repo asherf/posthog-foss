@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Union, cast
 import posthoganalytics
 from django.core.cache import cache
 from django.db.models import Count, Exists, OuterRef, Prefetch, QuerySet
-from django.db.models.query_utils import Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.timezone import now
@@ -93,9 +92,6 @@ class ActionSerializer(serializers.HyperlinkedModelSerializer):
         ]
         extra_kwargs = {"team_id": {"read_only": True}}
 
-    def _calculate_action(self, action: Action) -> None:
-        calculate_action.delay(action_id=action.pk)
-
     def validate(self, attrs):
         instance = cast(Action, self.instance)
         exclude_args = {}
@@ -123,7 +119,7 @@ class ActionSerializer(serializers.HyperlinkedModelSerializer):
                 action=instance, **{key: value for key, value in step.items() if key not in ("isNew", "selection")},
             )
 
-        self._calculate_action(instance)
+        calculate_action.delay(action_id=instance.pk)
         posthoganalytics.capture(
             validated_data["created_by"].distinct_id, "action created", instance.get_analytics_metadata()
         )
@@ -152,7 +148,7 @@ class ActionSerializer(serializers.HyperlinkedModelSerializer):
                     )
 
         instance = super().update(instance, validated_data)
-        self._calculate_action(instance)
+        calculate_action.delay(action_id=instance.pk)
         instance.refresh_from_db()
         posthoganalytics.capture(
             self.context["request"].user.distinct_id,
@@ -205,7 +201,7 @@ class ActionViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
     @cached_function
     def _calculate_trends(self, request: request.Request) -> List[Dict[str, Any]]:
         team = self.team
-        filter = Filter(request=request)
+        filter = Filter(request=request, team=self.team)
         if filter.insight == INSIGHT_STICKINESS or filter.shown_as == TRENDS_STICKINESS:
             earliest_timestamp_func = lambda team_id: Event.objects.earliest_timestamp(team_id)
             stickiness_filter = StickinessFilter(
@@ -238,7 +234,7 @@ class ActionViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
             data.update({"entites": [Entity({"id": entity_data["id"], "type": entity_data["type"]})]})
 
         data.update({"date_from": "-11d"})
-        filter = RetentionFilter(data=data)
+        filter = RetentionFilter(data=data, team=self.team)
 
         result = retention.Retention().run(filter, team)
         return Response({"data": result})
@@ -249,7 +245,7 @@ class ActionViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         refresh = should_refresh(request)
         dashboard_id = request.GET.get("from_dashboard", None)
 
-        filter = Filter(request=request)
+        filter = Filter(request=request, team=self.team)
         cache_key = generate_cache_key("{}_{}".format(filter.toJSON(), team.pk))
         result = {"loading": True}
 
@@ -282,7 +278,7 @@ class ActionViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
 
     def get_people(self, request: request.Request) -> Union[Dict[str, Any], List]:
         team = self.team
-        filter = Filter(request=request)
+        filter = Filter(request=request, team=self.team)
         entity = get_target_entity(request)
 
         events = filter_by_type(entity=entity, team=team, filter=filter)

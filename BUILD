@@ -11,6 +11,6 @@ pex_binary(
     entry_point="manage.py",
 )
 
-python_library(
+python_sources(
     name="root",
 )

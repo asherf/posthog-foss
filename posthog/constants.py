@@ -3,6 +3,7 @@ from enum import Enum
 INTERNAL_BOT_EMAIL_SUFFIX = "@posthogbot.user"
 
 
+# N.B. Keep this in sync with frontend enum (types.ts)
 class AvailableFeature(str, Enum):
     ZAPIER = "zapier"
     ORGANIZATIONS_PROJECTS = "organizations_projects"
@@ -11,6 +12,7 @@ class AvailableFeature(str, Enum):
     SAML = "saml"
     DASHBOARD_COLLABORATION = "dashboard_collaboration"
     INGESTION_TAXONOMY = "ingestion_taxonomy"
+    PATHS_ADVANCED = "paths_advanced"
 
 
 TREND_FILTER_TYPE_ACTIONS = "actions"
@@ -117,6 +119,7 @@ FUNNEL_ORDER_TYPE = "funnel_order_type"
 FUNNEL_VIZ_TYPE = "funnel_viz_type"
 FUNNEL_CORRELATION_TYPE = "funnel_correlation_type"
 FUNNEL_CORRELATION_NAMES = "funnel_correlation_names"
+FUNNEL_CORRELATION_EVENT_NAMES = "funnel_correlation_event_names"
 BIN_COUNT = "bin_count"
 ENTRANCE_PERIOD_START = "entrance_period_start"
 DROP_OFF = "drop_off"
@@ -152,6 +155,7 @@ class FunnelVizType(str, Enum):
 class FunnelCorrelationType(str, Enum):
     EVENTS = "events"
     PROPERTIES = "properties"
+    EVENT_WITH_PROPERTIES = "event_with_properties"
 
 
 RETENTION_RECURRING = "retention_recurring"

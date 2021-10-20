@@ -17,10 +17,13 @@ import {
     ViewType,
     InsightType,
     PropertyFilter,
+    SessionPlayerData,
+    AvailableFeature,
 } from '~/types'
 import { Dayjs } from 'dayjs'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { PersonModalParams } from 'scenes/trends/personsModalLogic'
+import { EventIndex } from '@posthog/react-rrweb-player'
 
 const keyMappingKeys = Object.keys(keyMapping.event)
 
@@ -133,7 +136,7 @@ function sanitizeFilterParams(filters: Partial<FilterType>): Record<string, any>
     }
 }
 
-export const eventUsageLogic = kea<eventUsageLogicType<DashboardEventSource, RecordingViewedProps>>({
+export const eventUsageLogic = kea<eventUsageLogicType<DashboardEventSource, RecordingWatchedSource>>({
     connect: [preflightLogic],
     actions: {
         reportAnnotationViewed: (annotations: AnnotationType[] | null) => ({ annotations }),
@@ -251,7 +254,14 @@ export const eventUsageLogic = kea<eventUsageLogicType<DashboardEventSource, Rec
         reportInsightsControlsCollapseToggle: (collapsed: boolean) => ({ collapsed }),
         reportInsightsTableCalcToggled: (mode: string) => ({ mode }),
         reportInsightShortUrlVisited: (valid: boolean, insight: InsightType | null) => ({ valid, insight }),
-        reportRecordingViewed: (payload: RecordingViewedProps) => ({ payload }),
+        reportPayGateShown: (identifier: AvailableFeature) => ({ identifier }),
+        reportPayGateDismissed: (identifier: AvailableFeature) => ({ identifier }),
+        reportRecordingViewed: (
+            recordingData: SessionPlayerData,
+            source: RecordingWatchedSource,
+            loadTime: number,
+            delay: number
+        ) => ({ recordingData, source, loadTime, delay }),
     },
     listeners: {
         reportAnnotationViewed: async ({ annotations }, breakpoint) => {
@@ -592,9 +602,24 @@ export const eventUsageLogic = kea<eventUsageLogicType<DashboardEventSource, Rec
         reportInsightShortUrlVisited: (props) => {
             posthog.capture('insight short url visited', props)
         },
-        reportRecordingViewed: ({ payload }) => {
-            const { delay, ...props } = payload
-            posthog.capture(`recording ${delay ? 'analyzed' : 'viewed'}`, props)
+        reportRecordingViewed: ({ recordingData, source, loadTime, delay }) => {
+            const eventIndex = new EventIndex(recordingData?.snapshots || [])
+            const payload: Partial<RecordingViewedProps> = {
+                load_time: loadTime,
+                duration: eventIndex.getDuration(),
+                start_time: recordingData?.start_time,
+                page_change_events_length: eventIndex.pageChangeEvents().length,
+                recording_width: eventIndex.getRecordingMetadata(0)[0]?.width,
+                user_is_identified: recordingData.person?.is_identified,
+                source: source,
+            }
+            posthog.capture(`recording ${delay ? 'analyzed' : 'viewed'}`, payload)
+        },
+        reportPayGateShown: (props) => {
+            posthog.capture('pay gate shown', props)
+        },
+        reportPayGateDismissed: (props) => {
+            posthog.capture('pay gate dismissed', props)
         },
     },
 })

@@ -14,9 +14,6 @@ rm -rf "${WORKDIR}/frontend-dist"
 mkdir "${WORKDIR}/frontend-dist"
 cp -r "frontend/dist/" "${WORKDIR}/frontend-dist"
 
-
-
-
 echo "Build gunicorn PEX"
 ./toolchain/prod/docker/builder/dockers.sh package package posthog/toolchain/web:gunicorn-app
 cp dist.docker/posthog.toolchain.web/gunicorn-app.pex "${WORKDIR}/gunicorn.pex"

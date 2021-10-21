@@ -76,6 +76,7 @@ DEBUG = True
 # PLUGINS_CELERY_QUEUE = os.getenv("PLUGINS_CELERY_QUEUE", "posthog-plugins")
 # PLUGINS_RELOAD_PUBSUB_CHANNEL = os.getenv("PLUGINS_RELOAD_PUBSUB_CHANNEL", "reload-plugins")
 
+
 # Tokens used when installing plugins, for example to get the latest commit SHA or to download private repositories.
 # Used mainly to get around API limits and only if no ?private_token=TOKEN found in the plugin URL.
 # GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", None)
@@ -179,14 +180,14 @@ DEBUG = True
 # except ValueError:
 #     PRIMARY_DB = AnalyticsDBMS.POSTGRES
 
-# EE_AVAILABLE = False
-
+EE_AVAILABLE = False
+PLUGINS_RELOAD_PUBSUB_CHANNEL = "reload-plugins"
 ACTION_EVENT_MAPPING_INTERVAL_SECONDS = 300
 EVENT_PROPERTY_USAGE_INTERVAL_SECONDS = 60 * 60
 UPDATE_CACHED_DASHBOARD_ITEMS_INTERVAL_SECONDS = 90
-EE_AVAILABLE = False
 ASYNC_EVENT_PROPERTY_USAGE = False
 CLICKHOUSE_REPLICATION = False
+MULTI_TENANCY = False
 # get_from_env("ACTION_EVENT_MAPPING_INTERVAL_SECONDS", 300, type_cast=int)
 
 # ASYNC_EVENT_PROPERTY_USAGE = get_from_env("ASYNC_EVENT_PROPERTY_USAGE", False, type_cast=str_to_bool)

@@ -9,6 +9,10 @@ WORKDIR=toolchain/prod/docker/web
 
 echo "Build frontend web app"
 yarn --frozen-lockfile
+yarn build
+rm -rf "${WORKDIR}/frontend-dist"
+mkdir "${WORKDIR}/frontend-dist"
+cp -r "frontend/dist/" "${WORKDIR}/frontend-dist"
 
 
 

@@ -45,3 +45,7 @@ plugin-server/src/config/idl/protos.*
 /.pants.workdir.file_lock*
 .docker.pants.d/
 *.pex
+
+
+# Docker build stuff
+/toolchain/prod/docker/web/frontend-dist/

@@ -27,5 +27,5 @@ COPY --chown=${USER}:${USER}  frontend-dist/ frontend/dist/
 RUN echo "PEX_MODULE=${MANAGE_PY_MODULE} ./gunicorn.pex \"\$@\"" >> ./manage.py && chmod 755 ./manage.py
 
 # Collect the static files into /staticfiles. This dir is shared with the fronting nginx via a docker volume.
-RUN ./manage.py collectstatic --noinput --settings "posthog.toolchain.web.settings_collectstatic" && RUN rm -rf frontend
+RUN DJANGO_SETTINGS_MODULE=posthog.toolchain.web.settings_collectstatic ./manage.py collectstatic --noinput && RUN rm -rf frontend
 CMD ["/pex/gunicorn.pex"]

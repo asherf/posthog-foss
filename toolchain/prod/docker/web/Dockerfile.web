@@ -21,12 +21,11 @@ WORKDIR /pex
 
 COPY --chown=${USER}:${USER} ${PEX_FILE} ./gunicorn.pex
 COPY --chown=${USER}:${USER}  frontend-dist/ frontend/dist/
-RUN ls -lah frontend/dist/
+
 # Create a wrapper script to invoke manage.py directly out of the pex.
 # We use the script in this Dockerfile, but it's also useful when exec'ing into a running container.
 RUN echo "PEX_MODULE=${MANAGE_PY_MODULE} ./gunicorn.pex \"\$@\"" >> ./manage.py && chmod 755 ./manage.py
 
 # Collect the static files into /staticfiles. This dir is shared with the fronting nginx via a docker volume.
-RUN SECRET_KEY='unsafe secret key for collectstatic only' DATABASE_URL='postgres:///' REDIS_URL='redis:///' ./manage.py collectstatic --noinput
-
+RUN ./manage.py collectstatic --noinput --settings "posthog.toolchain.web.settings_collectstatic" && RUN rm -rf frontend
 CMD ["/pex/gunicorn.pex"]

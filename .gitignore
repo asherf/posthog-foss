@@ -44,3 +44,4 @@ plugin-server/src/config/idl/protos.*
 /.pids
 /.pants.workdir.file_lock*
 .docker.pants.d/
+*.pex

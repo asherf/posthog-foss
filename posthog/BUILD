@@ -7,5 +7,6 @@ python_sources(
     "//:social-auth-core",
     "//:django-axes",
     "//:django-rest-hooks",
+    "//:setuptools"
   ]
 )

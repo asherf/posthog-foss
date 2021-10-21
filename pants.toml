@@ -1,6 +1,14 @@
 [GLOBAL]
 pants_version = "2.8.0.dev5"
-backend_packages = ["pants.backend.python"]
+backend_packages.add = [
+  "toolchain.pants",
+  "pants.backend.project_info",
+  "pants.backend.python",
+  "pants.backend.python.lint.black",
+  # "pants.backend.python.lint.flake8",
+  "pants.backend.python.lint.isort",
+  
+]
 
 [anonymous-telemetry]
 enabled = false

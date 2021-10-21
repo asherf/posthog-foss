@@ -1,15 +1,6 @@
-# Copyright 2020 Pants project contributors.
-# Licensed under the Apache License, Version 2.0 (see LICENSE).
+name: PostHog-FOSS-CI
 
-# See https://pants.readme.io/docs/using-pants-in-ci for tips on how to set up your CI with Pants.
-
-name: Pants
-
-on:
-  push:
-    branches: [ "*" ]
-  pull_request:
-    branches: [ master ]
+on: [push, pull_request]
 
 jobs:
   build:

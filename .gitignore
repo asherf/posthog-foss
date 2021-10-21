@@ -40,5 +40,7 @@ plugin-server/src/config/idl/protos.*
 # Pants workspace files
 /.pants.d/
 /dist/
+/dist.docker/
 /.pids
 /.pants.workdir.file_lock*
+.docker.pants.d/

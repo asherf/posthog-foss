@@ -1,5 +1,5 @@
-python_requirements(requirements_relpath="requirements.in")
-python_requirements(requirements_relpath="requirements-dev.in")
+python_requirements(source="requirements.in")
+python_requirements(source="requirements-dev.in")
 
 pex_binary(
     name="docker-compose-config",

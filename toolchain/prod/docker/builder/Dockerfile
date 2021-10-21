@@ -15,7 +15,7 @@ RUN apt-get update && \
 ARG posthog_repo=/posthog/host_repo
 ARG posthog_bootstrap_cache=/posthog/.cache
 
-RUN mkdir /toolchain && \
+RUN mkdir /posthog && \
     useradd --no-log-init -u ${my_host_uid} --user-group --home /posthog posthog && \
     chown posthog:posthog /posthog && \
     mkdir ${posthog_bootstrap_cache} && \
@@ -23,7 +23,7 @@ RUN mkdir /toolchain && \
 
 USER posthog
 
-# Mount point for the host's toolchain repo, so we can build directly from the host's source files.
+# Mount point for the host's posthog repo, so we can build directly from the host's source files.
 VOLUME ${posthog_repo}
 
 # Mount point for the pants bootstrap cache, so we can conserve it between container runs.

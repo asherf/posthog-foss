@@ -17,7 +17,7 @@ if [[ -z $(docker volume ls -q --filter name=${bootstrap_cache}) ]]; then
 fi
 
 docker run \
-  --mount type=bind,source="$(pwd)",target=/toolchain/host_repo \
-  --mount type=volume,src="${bootstrap_cache}",dst=/toolchain/.cache \
+  --mount type=bind,source="$(pwd)",target=/posthog/host_repo \
+  --mount type=volume,src="${bootstrap_cache}",dst=/posthog/.cache \
   --rm \
   pexbuild:latest "$@"

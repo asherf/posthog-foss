@@ -1,0 +1,35 @@
+FROM python:3.8.12-slim-buster@sha256:7e732593f25983fa7d4b2d54444be4a785f2397c1cf2f815d2e3638337eee012
+
+ARG MANAGE_PY_MODULE
+ARG PEX_FILE
+ARG COLLECT_STATIC=1
+ARG COMMIT_SHA
+ARG USER=posthogweb
+# The uid:gid 99:99 is nobody:nobody on our production host system (AWS's EKS-optimized AMI).
+ARG USER_ID=99 
+
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends procps && \
+    apt-get -y clean && rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid ${USER_ID}} ${USER} && useradd -m --no-log-init --uid ${USER_ID} --gid ${USER_ID} ${USER}} && \
+    mkdir -p /var/log/gunicorn/ && chown toolchain:toolchain /var/log/gunicorn/ && chmod 755 /var/log/gunicorn/ && \
+    mkdir -p /var/run/gunicorn/ && chown toolchain:toolchain /var/run/gunicorn/ && chmod 755 /var/run/gunicorn/ && \
+    mkdir /pex && chown ${USER}:${USER} /pex && chmod 755 /pex && \
+    mkdir /staticfiles && chown ${USER}:${USER} /staticfiles && chmod 755 /staticfiles
+
+USER ${USER}:${USER}
+
+WORKDIR /pex
+
+COPY --chown=${USER}:${USER} ${PEX_FILE} ./gunicorn.pex
+
+# Create a wrapper script to invoke manage.py directly out of the pex.
+# We use the script in this Dockerfile, but it's also useful when exec'ing into a running container.
+RUN echo "PEX_MODULE=${MANAGE_PY_MODULE} ./gunicorn.pex \"\$@\"" >> ./manage.py && chmod 755 ./manage.py
+
+# Collect the static files into /staticfiles. This dir is shared with the fronting nginx via a docker volume.
+RUN test "${COLLECT_STATIC}" = 1 || exit 0 && ./manage.py collectstatic --noinput
+
+ENV GIT_COMMIT_SHA=${COMMIT_SHA}
+
+CMD ["/pex/gunicorn.pex"]

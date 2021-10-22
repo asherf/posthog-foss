@@ -1,6 +1,5 @@
 import uuid
 
-
 DEBUG = True
 EE_AVAILABLE = False
 PLUGINS_RELOAD_PUBSUB_CHANNEL = "reload-plugins"

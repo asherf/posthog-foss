@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 from celery.bin.celery import main as celery_main
 
 

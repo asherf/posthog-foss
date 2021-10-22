@@ -575,7 +575,7 @@ class TestCapture(BaseTest):
         )
 
     @patch("posthog.api.capture.celery_app.send_task")
-    def test_python_sources(self, patch_process_event_with_plugins):
+    def test_python_library(self, patch_process_event_with_plugins):
         self.client.post(
             "/track/",
             data={

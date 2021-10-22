@@ -8,5 +8,6 @@ def start():
     # import ipdb; ipdb.set_trace()
     sys.exit(celery_main(argv=["celery", "-A", "posthog", "worker"]))
 
+
 if __name__ == "__main__":
     start()

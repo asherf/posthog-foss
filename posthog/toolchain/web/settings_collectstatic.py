@@ -84,17 +84,17 @@ AUTHENTICATION_BACKENDS: List[str] = [
     "social_core.backends.gitlab.GitLabOAuth2",
     "django.contrib.auth.backends.ModelBackend",
 ]
- 
+
 
 DATABASE_URL = "postgres:///"
 REDIS_URL = "redis:///"
- 
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",},
 ]
 
 PASSWORD_RESET_TIMEOUT = 86_400  # 1 day
- 
+
 # Internationalization
 # https://docs.djangoproject.com/en/2.2/topics/i18n/
 
@@ -123,7 +123,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 EXCEPTIONS_HOG = {
     "EXCEPTION_REPORTING": "posthog.exceptions.exception_reporting",
 }
- 
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -135,4 +135,3 @@ LOGGING = {
         "statsd": {"handlers": ["console"], "level": "WARNING", "propagate": True,},
     },
 }
- 

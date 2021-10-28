@@ -38,7 +38,7 @@ jobs:
               # uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
               uses: docker/metadata-action@v3.6.0
               with:
-                  images: ghcr.io/toolchain-posthog-foss
+                  images: ghcr.io/asherf/toolchain-posthog-foss
             - name: prep pex and frontend
               run: |
                   ./toolchain/prod/docker/web/prep-build-web-ci.sh

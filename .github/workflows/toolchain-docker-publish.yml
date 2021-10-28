@@ -9,6 +9,14 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v2
+            - uses: actions/cache@v2
+              id: cache
+              with:
+                  path: |
+                      ~/.cache/pants/setup
+                      ~/.cache/pants/lmdb_store
+                      ~/.cache/pants/named_caches
+                  key: ${{ runner.os }}-
             - name: Update git SHA
               run: echo "GIT_SHA = '${GITHUB_SHA}'" > posthog/gitsha.py
             - name: Set up QEMU
@@ -31,24 +39,24 @@ jobs:
               uses: docker/metadata-action@v3.6.0
               with:
                   images: ghcr.io/toolchain-posthog-foss
+            - name: prep pex and frontend
+              run: |
+                  ./toolchain/prod/docker/web/prep-build-web-ci.sh
+            - name: Upload pants log
+              uses: actions/upload-artifact@v2
+              with:
+                  name: pants-log
+                  path: .pants.d/pants.log
+              if: always() # We want the log even on failures.
             - name: Build and push Docker image
+              id: container-release
               # uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
               uses: docker/build-push-action@v2
               with:
-                  context: .
+                  context: ./toolchain/prod/docker/web
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
-            # - name: Build release
-            #   id: docker-release
-            #   uses: docker/build-push-action@v2
-            #   with:
-            #       context: .
-            #       push: false
-            #       tags: |
-            #           asherf/posthog-foss:latest-release
-            #           asherf/posthog-foss:release-${{ env.TAG_NAME  }}
-
             # - name: Image digest
             #   run: |
-            #       echo "Pushed release: ${{ steps.docker-release.outputs.digest }}"
+            #       echo "Pushed release: ${{ steps.container-release.outputs.digest }}"

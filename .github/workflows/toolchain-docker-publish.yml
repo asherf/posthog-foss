@@ -41,12 +41,11 @@ jobs:
                   registry: ghcr.io
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
-            - name: Extract metadata (tags, labels) for Docker
-              id: meta
-              # uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-              uses: docker/metadata-action@v3.6.0
-              with:
-                  images: ghcr.io/asherf/toolchain-posthog-foss
+            # - name: Extract metadata (tags, labels) for Docker
+            #   id: meta
+            #   uses: docker/metadata-action@v3.6.0
+            #   with:
+            #       images: ghcr.io/asherf/toolchain-posthog-foss
             - name: prep pex and frontend
               run: |
                   ./toolchain/prod/docker/web/prep-build-web-ci.sh
@@ -58,13 +57,13 @@ jobs:
               if: always() # We want the log even on failures.
             - name: Build and push Docker image
               id: container-release
-              # uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
               uses: docker/build-push-action@v2
               with:
                   context: ./toolchain/prod/docker/web
                   file: toolchain/prod/docker/web/Dockerfile.web
                   push: true
-                  tags: ${{ steps.meta.outputs.tags }}
+                  # tags: ${{ steps.meta.outputs.tags }}
+                  tags: ghcr.io/asherf/toolchain-posthog-foss:ls0
                   # labels: ${{ steps.meta.outputs.labels }}
             # - name: Image digest
             #   run: |

@@ -6,7 +6,7 @@ from gunicorn.app.wsgiapp import WSGIApplication
 
 class PosthogWSGIApplication(WSGIApplication):
 
-    _WSGI_APP = "posthog.toolchain.app.wsgi:application"
+    _WSGI_APP = "posthog.toolchain.web.wsgi:application"
 
     def load_config(self) -> None:
         self.cfg.set("default_proc_name", self._WSGI_APP)

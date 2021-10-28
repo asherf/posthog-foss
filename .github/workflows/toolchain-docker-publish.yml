@@ -62,7 +62,7 @@ jobs:
               uses: docker/build-push-action@v2
               with:
                   context: ./toolchain/prod/docker/web
-                  file: Dockerfile.web
+                  file: toolchain/prod/docker/web/Dockerfile.web
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   # labels: ${{ steps.meta.outputs.labels }}

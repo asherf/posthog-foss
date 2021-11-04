@@ -67,7 +67,7 @@ export function areObjectValuesEmpty(obj: Record<string, any>): boolean {
     )
 }
 
-export function toParams(obj: Record<string, any>): string {
+export function toParams(obj: Record<string, any>, explodeArrays: boolean = false): string {
     if (!obj) {
         return ''
     }
@@ -79,8 +79,25 @@ export function toParams(obj: Record<string, any>): string {
         val = typeof val === 'object' ? JSON.stringify(val) : val
         return encodeURIComponent(val)
     }
+
     return Object.entries(obj)
         .filter((item) => item[1] != undefined && item[1] != null)
+        .reduce((acc, [key, val]) => {
+            /**
+             *  query parameter arrays can be handled in two ways
+             *  either they are encoded as a single query parameter
+             *    a=[1, 2] => a=%5B1%2C2%5D
+             *  or they are "exploded" so each item in the array is sent separately
+             *    a=[1, 2] => a=1&a=2
+             **/
+            if (explodeArrays && Array.isArray(val)) {
+                val.forEach((v) => acc.push([key, v]))
+            } else {
+                acc.push([key, val])
+            }
+
+            return acc
+        }, [] as [string, any][])
         .map(([key, val]) => `${key}=${handleVal(val)}`)
         .join('&')
 }
@@ -146,7 +163,7 @@ export function errorToast(title?: string, message?: string, errorDetail?: strin
 
     const handleHelp = (): void => {
         if (helpButtonLogic.isMounted()) {
-            helpButtonLogic.actions.setVisible(true)
+            helpButtonLogic.actions.showHelp()
         } else {
             window.open('https://posthog.com/support?utm_medium=in-product&utm_campaign=error-toast')
         }
@@ -747,10 +764,6 @@ export function clamp(value: number, min: number, max: number): number {
     return value > max ? max : value < min ? min : value
 }
 
-export function isTouchDevice(): boolean {
-    return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0
-}
-
 export function isMobile(): boolean {
     return navigator.userAgent.includes('Mobile')
 }
@@ -815,7 +828,7 @@ export function sampleOne<T>(items: T[]): T {
     return items[Math.floor(Math.random() * items.length)]
 }
 
-/** Convert camelCase, PascalCase or snake_case to Title Case. */
+/** Convert camelCase, PascalCase or snake_case to Sentence case. */
 export function identifierToHuman(identifier: string | number): string {
     const words: string[] = []
     let currentWord: string = ''
@@ -844,7 +857,7 @@ export function identifierToHuman(identifier: string | number): string {
     if (currentWord) {
         words.push(currentWord)
     }
-    return words.map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')
+    return capitalizeFirstLetter(words.join(' '))
 }
 
 export function parseGithubRepoURL(url: string): Record<string, string> {
@@ -1119,4 +1132,8 @@ export function validateJsonFormItem(_: any, value: string): Promise<string | vo
 
 export function ensureStringIsNotBlank(s?: string | null): string | null {
     return typeof s === 'string' && s.trim() !== '' ? s : null
+}
+
+export function setPageTitle(title: string): void {
+    document.title = title ? `${title} • PostHog` : 'PostHog'
 }

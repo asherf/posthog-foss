@@ -34,6 +34,21 @@ describe('toParams', () => {
         const right = toParams({ a: 'b', ...{}, ...{}, b: 'c' })
         expect(left).toEqual(right)
     })
+
+    it('can handle numeric values', () => {
+        const actual = toParams({ a: 123 })
+        expect(actual).toEqual('a=123')
+    })
+
+    it('encodes arrays as a single query param', () => {
+        const actual = toParams({ include: ['a', 'b'] })
+        expect(actual).toEqual('include=%5B%22a%22%2C%22b%22%5D')
+    })
+
+    it('can explode arrays to individual parameters', () => {
+        const actual = toParams({ include: ['a', 'b'] }, true)
+        expect(actual).toEqual('include=a&include=b')
+    })
 })
 
 describe('capitalizeFirstLetter()', () => {
@@ -46,16 +61,16 @@ describe('capitalizeFirstLetter()', () => {
 
 describe('identifierToHuman()', () => {
     it('humanizes properly', () => {
-        expect(identifierToHuman('testIdentifier')).toEqual('Test Identifier')
-        expect(identifierToHuman('testIdentifierX')).toEqual('Test Identifier X')
+        expect(identifierToHuman('testIdentifier')).toEqual('Test identifier')
+        expect(identifierToHuman('testIdentifierX')).toEqual('Test identifier x')
         expect(identifierToHuman('something     ')).toEqual('Something')
-        expect(identifierToHuman('  some_property')).toEqual('Some Property')
+        expect(identifierToHuman('  some_property')).toEqual('Some property')
         expect(identifierToHuman(' Number666')).toEqual('Number 666')
         expect(identifierToHuman('7x')).toEqual('7x')
-        expect(identifierToHuman('7X')).toEqual('7 X')
+        expect(identifierToHuman('7X')).toEqual('7 x')
         expect(identifierToHuman('500')).toEqual('500')
         expect(identifierToHuman(404)).toEqual('404')
-        expect(identifierToHuman('CreateProject')).toEqual('Create Project')
+        expect(identifierToHuman('CreateProject')).toEqual('Create project')
     })
 })
 

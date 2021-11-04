@@ -87,7 +87,7 @@ export const MATHS: Record<string, any> = {
         type: EVENT_MATH_TYPE,
     },
     weekly_active: {
-        name: 'Weekly Active',
+        name: 'Weekly active',
         description: (
             <>
                 Users active in the past week (7 days).
@@ -100,7 +100,7 @@ export const MATHS: Record<string, any> = {
         type: EVENT_MATH_TYPE,
     },
     monthly_active: {
-        name: 'Monthly Active',
+        name: 'Monthly active',
         description: (
             <>
                 Users active in the past month (30 days).
@@ -231,15 +231,13 @@ export const FEATURE_FLAGS = {
     // Experiments / beta features
     INGESTION_GRID: 'ingestion-grid-exp-3', // owner: @kpthatsme
     TRAILING_WAU_MAU: '3638-trailing-wau-mau', // owner: @EDsCODE
-    EVENT_COLUMN_CONFIG: '4141-event-columns', // owner: @paolodamico
+    EVENT_COLUMN_CONFIG: '4141-event-columns', // owner: @pauldambra
     SAVED_INSIGHTS: '3408-saved-insights', // owner: @alexkim
     MULTIVARIATE_SUPPORT: '5440-multivariate-support', // owner: @mariusandra
     FUNNEL_HORIZONTAL_UI: '5730-funnel-horizontal-ui', // owner: @alexkim
     DIVE_DASHBOARDS: 'hackathon-dive-dashboards', // owner: @tiina303
     NEW_PATHS_UI: 'new-paths-ui', // owner: @EDsCODE
     NEW_PATHS_UI_EDGE_WEIGHTS: 'new-paths-ui-edge-weights', // owner: @neilkakkar
-    SPLIT_PERSON: '5898-split-persons', // owner: @timgl
-    TOOLBAR_FEATURE_FLAGS: 'posthog-toolbar-feature-flags', // owner: @mariusandra
     REMOVE_SESSIONS: '6050-remove-sessions', // owner: @rcmarron
     FUNNEL_VERTICAL_BREAKDOWN: '5733-funnel-vertical-breakdown', // owner: @alexkim
     RENAME_FILTERS: '6063-rename-filters', // owner: @alexkim
@@ -247,6 +245,8 @@ export const FEATURE_FLAGS = {
     SIGMA_ANALYSIS: 'sigma-analysis', // owner: @neilkakkar
     NEW_SESSIONS_PLAYER: 'new-sessions-player', // owner: @rcmarron
     BREAKDOWN_BY_MULTIPLE_PROPERTIES: '938-breakdown-by-multiple-properties', // owner: @pauldambra
+    LEMONADE: '5346-lemonade', // owner: @Twixes
+    TURBO_MODE: 'turbo-mode', // owner: @mariusandra
 }
 
 export const ENTITY_MATCH_TYPE = 'entities'
@@ -267,3 +267,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
 // Cohort types
 export const COHORT_STATIC = 'static'
 export const COHORT_DYNAMIC = 'dynamic'
+
+/**
+ * Mock Node.js `process`, which is required by VFile that is used by ReactMarkdown.
+ * See https://github.com/remarkjs/react-markdown/issues/339.
+ */
+export const MOCK_NODE_PROCESS = { cwd: () => '', env: {} } as unknown as NodeJS.Process

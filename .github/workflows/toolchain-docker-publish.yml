@@ -49,6 +49,7 @@ jobs:
             - name: prep pex and frontend
               run: |
                   ./toolchain/prod/docker/web/prep-build-web-ci.sh
+                  find frontend/dist -name "*.css"
             - name: Upload pants log
               uses: actions/upload-artifact@v2
               with:

@@ -50,6 +50,7 @@ jobs:
               run: |
                   ./toolchain/prod/docker/web/prep-build-web-ci.sh
                   find frontend/dist -name "*.css"
+                  find frontend/dist -name "*.svg"
             - name: Upload pants log
               uses: actions/upload-artifact@v2
               with:

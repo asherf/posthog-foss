@@ -26,7 +26,7 @@ export const groupsModel = kea<groupsModelType>({
             {
                 loadAllGroupTypes: async () => {
                     if (values.groupsEnabled) {
-                        return await api.get(`api/projects/${values.currentTeamId}/groups`)
+                        return await api.get(`api/projects/${values.currentTeamId}/groups_types`)
                     }
                     return []
                 },
@@ -40,7 +40,7 @@ export const groupsModel = kea<groupsModelType>({
         ],
         showGroupsOptions: [
             (s) => [s.groupsEnabled, s.groupTypes],
-            (enabled, groupTypes) => enabled && groupTypes.length > 1,
+            (enabled, groupTypes) => enabled && groupTypes.length > 0,
         ],
         groupsTaxonomicTypes: [
             (s) => [s.groupTypes],

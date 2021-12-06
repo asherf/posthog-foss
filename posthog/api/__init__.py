@@ -25,7 +25,6 @@ from . import (
     plugin_log_entry,
     property_definition,
     session_recording,
-    sessions_filter,
     team,
     user,
 )
@@ -46,7 +45,6 @@ router.register(r"feature_flag", feature_flag.LegacyFeatureFlagViewSet)  # Shoul
 router.register(r"dashboard", dashboard.LegacyDashboardsViewSet)  # Should be completely unused now
 router.register(r"dashboard_item", dashboard.LegacyDashboardItemViewSet)  # To be deleted - unified into insight viewset
 router.register(r"plugin_config", plugin.LegacyPluginConfigViewSet)
-router.register(r"sessions_filter", sessions_filter.LegacySessionsFilterViewSet)
 
 # Nested endpoints shared
 projects_router = router.register(r"projects", team.TeamViewSet)
@@ -62,9 +60,6 @@ projects_router.register(
 projects_router.register(r"annotations", annotation.AnnotationsViewSet, "project_annotations", ["team_id"])
 projects_router.register(r"feature_flags", feature_flag.FeatureFlagViewSet, "project_feature_flags", ["team_id"])
 projects_router.register(r"dashboards", dashboard.DashboardsViewSet, "project_dashboards", ["team_id"])
-projects_router.register(
-    r"sessions_filters", sessions_filter.SessionsFilterViewSet, "project_session_filters", ["team_id"]
-)
 
 
 organizations_router = router.register(r"organizations", organization.OrganizationViewSet, "organizations")
@@ -105,7 +100,7 @@ if is_clickhouse_enabled():
     from ee.clickhouse.views.cohort import ClickhouseCohortViewSet, LegacyClickhouseCohortViewSet
     from ee.clickhouse.views.element import ClickhouseElementViewSet, LegacyClickhouseElementViewSet
     from ee.clickhouse.views.events import ClickhouseEventsViewSet, LegacyClickhouseEventsViewSet
-    from ee.clickhouse.views.groups import ClickhouseGroupsView
+    from ee.clickhouse.views.groups import ClickhouseGroupsTypesView, ClickhouseGroupsView
     from ee.clickhouse.views.insights import ClickhouseInsightsViewSet, LegacyClickhouseInsightsViewSet
     from ee.clickhouse.views.paths import ClickhousePathsViewSet, LegacyClickhousePathsViewSet
     from ee.clickhouse.views.person import ClickhousePersonViewSet, LegacyClickhousePersonViewSet
@@ -123,6 +118,7 @@ if is_clickhouse_enabled():
     projects_router.register(r"actions", ClickhouseActionsViewSet, "project_actions", ["team_id"])
     projects_router.register(r"events", ClickhouseEventsViewSet, "project_events", ["team_id"])
     projects_router.register(r"groups", ClickhouseGroupsView, "project_groups", ["team_id"])
+    projects_router.register(r"groups_types", ClickhouseGroupsTypesView, "project_groups_types", ["team_id"])
     projects_router.register(r"insights", ClickhouseInsightsViewSet, "project_insights", ["team_id"])
     projects_router.register(r"persons", ClickhousePersonViewSet, "project_persons", ["team_id"])
     projects_router.register(r"paths", ClickhousePathsViewSet, "project_paths", ["team_id"])

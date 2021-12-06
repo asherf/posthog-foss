@@ -19,6 +19,8 @@ import { PROPERTY_MATCH_TYPE } from 'lib/constants'
 import { UploadFile } from 'antd/lib/upload/interface'
 import { eventWithTime } from 'rrweb/typings/types'
 import { PostHog } from 'posthog-js'
+import React from 'react'
+import { PopupProps } from 'lib/components/Popup/Popup'
 
 export type Optional<T, K extends string | number | symbol> = Omit<T, K> & { [K in keyof T]?: T[K] }
 
@@ -340,15 +342,6 @@ export interface SessionRecordingMeta {
     end_time: number
     distinct_id: string
 }
-
-export interface LEGACY_SessionPlayerData {
-    snapshots: eventWithTime[]
-    person: PersonType | null
-    start_time: number
-    next: string | null
-    duration: number
-}
-
 export interface SessionPlayerData {
     snapshots: eventWithTime[]
     person: PersonType | null
@@ -394,6 +387,7 @@ export interface RecordingFilters {
     date_to?: string | null
     events?: Record<string, any>[]
     actions?: Record<string, any>[]
+    properties?: AnyPropertyFilter[]
     offset?: number
     session_recording_duration?: RecordingDurationFilter
 }
@@ -464,9 +458,30 @@ export interface PersonType {
     name?: string
     distinct_ids: string[]
     properties: Record<string, any>
-    is_identified: boolean
     created_at?: string
 }
+
+export interface PersonActorType {
+    type: 'person'
+    id?: string
+    properties: Record<string, any>
+    created_at?: string
+    uuid?: string
+    name?: string
+    distinct_ids: string[]
+    is_identified: boolean
+}
+
+export interface GroupActorType {
+    type: 'group'
+    id?: string | number
+    properties: Record<string, any>
+    created_at?: string
+    group_key: string
+    group_type_index: number
+}
+
+export type ActorType = PersonActorType | GroupActorType
 
 export interface CohortGroupType {
     id: string
@@ -522,7 +537,6 @@ export enum StepOrderValue {
 
 export enum PersonsTabType {
     EVENTS = 'events',
-    SESSIONS = 'sessions',
     SESSION_RECORDINGS = 'sessionRecordings',
 }
 
@@ -538,36 +552,28 @@ export interface EventsTableAction {
 
 export interface EventType {
     elements: ElementType[]
-    elements_hash: string | null
+    elements_hash: string | null // Deprecated for elements_chain
+    elements_chain?: string | null
     id: number | string
     properties: Record<string, any>
     timestamp: string
+    zeroOffsetTime?: number // Used in session recording events that have a start time offset
+    colonTimestamp?: string // Used in session recording events list
     person?: Partial<PersonType> | null
     event: string
 }
 
-export interface SeekbarEventType extends Omit<EventType, 'timestamp'> {
+export interface RecordingEventType extends Omit<EventType, 'timestamp'> {
     percentage: number
     timestamp: number
+    queryValue?: string
+    colonTimestamp?: string
 }
 
 export interface EventsTableRowItem {
     event?: EventType
     date_break?: string
     new_events?: boolean
-}
-
-export interface SessionType {
-    distinct_id: string
-    global_session_id: string
-    length: number
-    start_time: string
-    end_time: string
-    session_recordings: SessionRecordingType[]
-    start_url: string | null
-    end_url: string | null
-    email?: string | null
-    matching_events: Array<number | string>
 }
 
 export interface SessionRecordingType {
@@ -613,10 +619,15 @@ export interface PlanInterface {
     price_string: string
 }
 
+// Creating a nominal type: https://github.com/microsoft/TypeScript/issues/202#issuecomment-961853101
+export type InsightShortId = string & { readonly '': unique symbol }
+
 export interface DashboardItemType {
+    /** The unique key we use when communicating with the user, e.g. in URLs */
+    short_id: InsightShortId
+    /** The primary key in the database, used as well in API endpoints */
     id: number
     name: string
-    short_id: string
     description?: string
     favorited?: boolean
     filters: Partial<FilterType>
@@ -636,7 +647,8 @@ export interface DashboardItemType {
     result: any | null
     updated_at: string
     tags: string[]
-    next?: string // only used in the frontend to store the next breakdown url
+    /** Only used in the frontend to store the next breakdown url */
+    next?: string
 }
 
 export interface DashboardType {
@@ -652,7 +664,9 @@ export interface DashboardType {
     deleted: boolean
     filters: Record<string, any>
     creation_mode: 'default' | 'template' | 'duplicate'
-    tags: string[] // TODO: To be implemented
+    tags: string[]
+    /** Purely local value to determine whether the dashboard should be highlighted, e.g. as a fresh duplicate. */
+    _highlight?: boolean
 }
 
 export type DashboardLayoutSize = 'lg' | 'sm' | 'xs' | 'xxs'
@@ -744,7 +758,7 @@ export interface AnnotationType {
     scope: AnnotationScope
     content: string
     date_marker: string
-    created_by?: UserBasicType | 'local' | null
+    created_by?: UserBasicType | null
     created_at: string
     updated_at: string
     dashboard_item?: number
@@ -764,7 +778,7 @@ export enum ChartDisplayType {
 }
 
 export type ShownAsType = ShownAsValue // DEPRECATED: Remove when releasing `remove-shownas`
-export type BreakdownType = 'cohort' | 'person' | 'event'
+export type BreakdownType = 'cohort' | 'person' | 'event' | 'group'
 export type IntervalType = 'minute' | 'hour' | 'day' | 'week' | 'month'
 
 export enum InsightType {
@@ -799,6 +813,11 @@ export type RetentionType = typeof RETENTION_RECURRING | typeof RETENTION_FIRST_
 
 export type BreakdownKeyType = string | number | (string | number)[] | null
 
+export interface Breakdown {
+    property: string | number
+    type: BreakdownType
+}
+
 export interface FilterType {
     insight?: InsightType
     display?: ChartDisplayType
@@ -810,6 +829,7 @@ export interface FilterType {
     actions?: Record<string, any>[]
     breakdown_type?: BreakdownType | null
     breakdown?: BreakdownKeyType
+    breakdowns?: Breakdown[]
     breakdown_value?: string | number
     breakdown_group_type_index?: number | null
     shown_as?: ShownAsType
@@ -865,6 +885,11 @@ export interface FilterType {
     funnel_correlation_person_converted?: 'true' | 'false' // Funnel Correlation Persons Converted - success or failure counts
     funnel_custom_steps?: number[] // used to provide custom steps for which to get people in a funnel - primarily for correlation use
     aggregation_group_type_index?: number | undefined // Groups aggregation
+    funnel_advanced?: boolean // used to toggle advanced options on or off
+}
+
+export interface RecordingEventsFilters {
+    query: string
 }
 
 export interface SystemStatusSubrows {
@@ -972,7 +997,14 @@ export interface FunnelStep {
     type: EntityType
     labels?: string[]
     breakdown?: BreakdownKeyType
-    breakdown_value?: string | number
+    breakdowns?: Breakdown[]
+    breakdown_value?: BreakdownKeyType
+
+    // Url that you can GET to retrieve the people that converted in this step
+    converted_people_url: string
+
+    // Url that you can GET to retrieve the people that dropped in this step
+    dropped_people_url: string
 }
 
 export interface FunnelStepWithNestedBreakdown extends FunnelStep {
@@ -1055,8 +1087,8 @@ export interface FlattenedFunnelStep extends FunnelStepWithConversionMetrics {
 export interface FlattenedFunnelStepByBreakdown {
     rowKey: number | string
     isBaseline?: boolean
-    breakdown?: string | number
-    breakdown_value?: string | number
+    breakdown?: BreakdownKeyType
+    breakdown_value?: BreakdownKeyType
     breakdownIndex?: number
     conversionRates?: {
         total: number
@@ -1066,7 +1098,7 @@ export interface FlattenedFunnelStepByBreakdown {
 }
 
 export interface ChartParams {
-    dashboardItemId?: number
+    dashboardItemId?: InsightShortId
     color?: string
     filters: Partial<FilterType>
     inSharedMode?: boolean
@@ -1077,7 +1109,7 @@ export interface ChartParams {
 // Shared between insightLogic, dashboardItemLogic, trendsLogic, funnelLogic, pathsLogic, retentionTableLogic
 export interface InsightLogicProps {
     /** currently persisted insight */
-    dashboardItemId?: number | null
+    dashboardItemId?: InsightShortId | null
     /** enable url handling for this insight */
     syncWithUrl?: boolean
     /** cached results, avoid making a request */
@@ -1116,6 +1148,7 @@ export interface MultivariateFlagOptions {
 interface FeatureFlagFilters {
     groups: FeatureFlagGroupType[]
     multivariate: MultivariateFlagOptions | null
+    aggregation_group_type_index?: number | null
 }
 
 export interface FeatureFlagType {
@@ -1289,6 +1322,35 @@ export interface GroupType {
 
 export type GroupTypeProperties = Record<number, Array<PersonProperty>>
 
+export interface Group {
+    group_type_index: number
+    group_key: string
+    created_at: string
+    group_properties: Record<string, any>
+}
+
+export interface Experiment {
+    id: string
+    name: string
+    description: string
+    feature_flags: string[]
+    filters: Partial<FilterType>
+}
+
+interface RelatedPerson {
+    type: 'person'
+    id: string
+    person: Pick<PersonType, 'distinct_ids' | 'properties'>
+}
+
+interface RelatedGroup {
+    type: 'group'
+    group_type_index: number
+    id: string
+}
+
+export type RelatedActor = RelatedPerson | RelatedGroup
+
 export interface SelectOption {
     value: string
     label?: string
@@ -1376,4 +1438,20 @@ export enum HelpType {
 export interface VersionType {
     version: string
     release_date?: string
+}
+
+export interface dateMappingOption {
+    inactive?: boolean // Options removed due to low usage (see relevant PR); will not show up for new insights but will be kept for existing
+    values: string[]
+}
+
+export interface Breadcrumb {
+    /** Name to display. */
+    name: string | null | undefined
+    /** Symbol, e.g. a lettermark or a profile picture. */
+    symbol?: React.ReactNode
+    /** Path to link to. */
+    path?: string
+    /** Whether to show a custom popup */
+    popup?: Pick<PopupProps, 'overlay' | 'sameWidth' | 'actionable'>
 }

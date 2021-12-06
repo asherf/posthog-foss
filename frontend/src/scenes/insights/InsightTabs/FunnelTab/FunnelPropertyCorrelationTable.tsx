@@ -1,8 +1,8 @@
-import React from 'react'
-import { Button, Table } from 'antd'
+import React, { useState } from 'react'
+import { Row, Table } from 'antd'
 import Column from 'antd/lib/table/Column'
 import { useActions, useValues } from 'kea'
-import { RiseOutlined, FallOutlined } from '@ant-design/icons'
+import { RiseOutlined, FallOutlined, EllipsisOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { funnelLogic } from 'scenes/funnels/funnelLogic'
 import { FunnelCorrelation, FunnelCorrelationResultsType, FunnelCorrelationType } from '~/types'
 import Checkbox from 'antd/lib/checkbox/Checkbox'
@@ -14,6 +14,9 @@ import { IconSelectProperties } from 'lib/components/icons'
 import './FunnelCorrelationTable.scss'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { VisibilitySensor } from 'lib/components/VisibilitySensor/VisibilitySensor'
+import { Popup } from 'lib/components/Popup/Popup'
+import { LemonButton } from 'lib/components/LemonButton'
+import { Tooltip } from 'lib/components/Tooltip'
 
 export function FunnelPropertyCorrelationTable(): JSX.Element | null {
     const { insightProps } = useValues(insightLogic)
@@ -28,6 +31,7 @@ export function FunnelPropertyCorrelationTable(): JSX.Element | null {
         inversePropertyNames,
         propertyNames,
         correlationPropKey,
+        allProperties,
     } = useValues(logic)
 
     const { setPropertyCorrelationTypes, setPropertyNames, openCorrelationPersonsModal } = useActions(logic)
@@ -121,16 +125,27 @@ export function FunnelPropertyCorrelationTable(): JSX.Element | null {
                         CORRELATED PROPERTIES
                     </span>
                     <span className="table-options">
-                        <p className="title">PROPERTIES </p>
-                        <PropertyNamesSelect
-                            value={new Set(propertyNames)}
-                            onChange={(selectedProperties: string[]) => setPropertyNames(selectedProperties)}
-                            allProperties={inversePropertyNames(excludedPropertyNames || [])}
-                        />
-                        <p className="title">CORRELATION</p>
+                        {allProperties.length > 0 && (
+                            <>
+                                <p className="title">PROPERTIES </p>
+                                <PropertyNamesSelect
+                                    value={new Set(propertyNames)}
+                                    onChange={(selectedProperties: string[]) => setPropertyNames(selectedProperties)}
+                                    allProperties={inversePropertyNames(excludedPropertyNames || [])}
+                                />
+                            </>
+                        )}
+                        <p className="title" style={{ marginLeft: 8 }}>
+                            CORRELATION
+                        </p>
                         <div
                             className="tab-btn ant-btn"
-                            style={{ marginRight: '2px', paddingTop: '1px', paddingBottom: '1px' }}
+                            style={{
+                                paddingTop: '1px',
+                                paddingBottom: '1px',
+                                borderTopRightRadius: 0,
+                                borderBottomRightRadius: 0,
+                            }}
                             onClick={() => onClickCorrelationType(FunnelCorrelationType.Success)}
                         >
                             <Checkbox
@@ -144,7 +159,13 @@ export function FunnelPropertyCorrelationTable(): JSX.Element | null {
                         </div>
                         <div
                             className="tab-btn ant-btn"
-                            style={{ marginRight: '5px', paddingTop: '1px', paddingBottom: '1px' }}
+                            style={{
+                                marginRight: '8px',
+                                paddingTop: '1px',
+                                paddingBottom: '1px',
+                                borderTopLeftRadius: 0,
+                                borderBottomLeftRadius: 0,
+                            }}
                             onClick={() => onClickCorrelationType(FunnelCorrelationType.Failure)}
                         >
                             <Checkbox
@@ -175,31 +196,51 @@ export function FunnelPropertyCorrelationTable(): JSX.Element | null {
                     }}
                 >
                     <Column
-                        title="Correlated Person Properties"
+                        title="Person property"
                         key="propertName"
                         render={(_, record: FunnelCorrelation) => renderOddsRatioTextRecord(record)}
                         align="left"
-                        width="60%"
                     />
                     <Column
-                        title="Completed"
+                        title={
+                            <div className="flex-center">
+                                Completed
+                                <Tooltip title="Users who have this property and completed the entire funnel.">
+                                    <InfoCircleOutlined className="column-info" />
+                                </Tooltip>
+                            </div>
+                        }
                         key="success_count"
                         render={(_, record: FunnelCorrelation) => renderSuccessCount(record)}
                         width={90}
                         align="center"
                     />
                     <Column
-                        title="Dropped off"
+                        title={
+                            <div className="flex-center">
+                                Dropped off
+                                <Tooltip
+                                    title={
+                                        <>
+                                            Users who have this property and did <b>not complete</b> the entire funnel.
+                                        </>
+                                    }
+                                >
+                                    <InfoCircleOutlined className="column-info" />
+                                </Tooltip>
+                            </div>
+                        }
                         key="failure_count"
                         render={(_, record: FunnelCorrelation) => renderFailureCount(record)}
-                        width={100}
+                        width={120}
                         align="center"
                     />
                     <Column
-                        title="Actions"
+                        title=""
                         key="actions"
                         render={(_, record: FunnelCorrelation) => <CorrelationActionsCell record={record} />}
                         align="center"
+                        width={30}
                     />
                 </Table>
             </div>
@@ -210,17 +251,42 @@ export function FunnelPropertyCorrelationTable(): JSX.Element | null {
 const CorrelationActionsCell = ({ record }: { record: FunnelCorrelation }): JSX.Element => {
     const { insightProps } = useValues(insightLogic)
     const logic = funnelLogic(insightProps)
-    const { excludePropertyFromProject } = useActions(logic)
+    const { excludePropertyFromProject, setFunnelCorrelationDetails } = useActions(logic)
     const { isPropertyExcludedFromProject } = useValues(logic)
     const propertyName = (record.event.event || '').split('::')[0]
 
+    const [popoverOpen, setPopoverOpen] = useState(false)
+
     return (
-        <Button
-            disabled={isPropertyExcludedFromProject(propertyName)}
-            onClick={() => excludePropertyFromProject(propertyName)}
-            type="link"
-        >
-            Exclude from project
-        </Button>
+        <Row style={{ justifyContent: 'flex-end' }}>
+            <Popup
+                visible={popoverOpen}
+                actionable
+                onClickOutside={() => setPopoverOpen(false)}
+                overlay={
+                    <>
+                        <LemonButton onClick={() => setFunnelCorrelationDetails(record)} fullWidth type="stealth">
+                            View correlation details
+                        </LemonButton>
+                        <LemonButton
+                            disabled={isPropertyExcludedFromProject(propertyName)}
+                            onClick={() => excludePropertyFromProject(propertyName)}
+                            fullWidth
+                            title="Remove this property from any correlation analysis report in this project."
+                            type="stealth"
+                        >
+                            Exclude property from project
+                        </LemonButton>
+                    </>
+                }
+            >
+                <LemonButton type="stealth" style={{ paddingLeft: 0 }} onClick={() => setPopoverOpen(!popoverOpen)}>
+                    <EllipsisOutlined
+                        style={{ color: 'var(--primary)', fontSize: 24 }}
+                        className="insight-dropdown-actions"
+                    />
+                </LemonButton>
+            </Popup>
+        </Row>
     )
 }

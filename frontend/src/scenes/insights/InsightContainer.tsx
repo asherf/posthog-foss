@@ -16,13 +16,12 @@ import { InsightsTable } from 'scenes/insights/InsightsTable'
 import React from 'react'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { annotationsLogic } from 'lib/components/Annotations'
-import { router } from 'kea-router'
 import {
-    ErrorMessage,
-    FunnelEmptyState,
-    FunnelInvalidExclusionFiltersEmptyState,
-    FunnelInvalidFiltersEmptyState,
-    TimeOut,
+    FunnelInvalidExclusionState,
+    FunnelSingleStepState,
+    InsightEmptyState,
+    InsightErrorState,
+    InsightTimeoutState,
 } from 'scenes/insights/EmptyStates'
 import { Loading } from 'lib/utils'
 import { funnelLogic } from 'scenes/funnels/funnelLogic'
@@ -46,11 +45,7 @@ export function InsightContainer(): JSX.Element {
     const { preflight } = useValues(preflightLogic)
     const { featureFlags } = useValues(featureFlagLogic)
     const {
-        hashParams: { fromItem },
-    } = useValues(router)
-    const { clearAnnotationsToCreate } = useActions(annotationsLogic({ pageKey: fromItem }))
-    const { annotationsToCreate } = useValues(annotationsLogic({ pageKey: fromItem }))
-    const {
+        insight,
         insightProps,
         lastRefresh,
         isLoading,
@@ -60,44 +55,44 @@ export function InsightContainer(): JSX.Element {
         insightMode,
         showTimeoutMessage,
         showErrorMessage,
-        insightLoading,
     } = useValues(insightLogic)
-    const { areFiltersValid, isValidFunnel, areExclusionFiltersValid } = useValues(funnelLogic(insightProps))
+    const { areFiltersValid, isValidFunnel, areExclusionFiltersValid, correlationAnalysisAvailable } = useValues(
+        funnelLogic(insightProps)
+    )
+    const { clearAnnotationsToCreate } = useActions(annotationsLogic({ insightId: insight.id }))
+    const { annotationsToCreate } = useValues(annotationsLogic({ insightId: insight.id }))
 
     // Empty states that completely replace the graph
     const BlockingEmptyState = (() => {
-        if (activeView !== loadedView) {
-            return <Loading />
+        if (activeView !== loadedView || isLoading) {
+            return (
+                <>
+                    <div style={{ minHeight: 'min(calc(90vh - 16rem), 36rem)' }} />
+                    <Loading />
+                </>
+            )
         }
         // Insight specific empty states - note order is important here
         if (loadedView === InsightType.FUNNELS) {
             if (!areFiltersValid) {
-                return <FunnelInvalidFiltersEmptyState />
+                return <FunnelSingleStepState />
             }
             if (!areExclusionFiltersValid) {
-                return <FunnelInvalidExclusionFiltersEmptyState />
+                return <FunnelInvalidExclusionState />
             }
-            if (!isValidFunnel && !(insightLoading || isLoading)) {
-                return <FunnelEmptyState />
+            if (!isValidFunnel && !isLoading) {
+                return <InsightEmptyState />
             }
         }
 
         // Insight agnostic empty states
         if (showErrorMessage) {
-            return <ErrorMessage />
+            return <InsightErrorState />
         }
         if (showTimeoutMessage) {
-            return <TimeOut isLoading={isLoading} />
+            return <InsightTimeoutState isLoading={isLoading} />
         }
 
-        return null
-    })()
-
-    // Empty states that can coexist with the graph (e.g. Loading)
-    const CoexistingEmptyState = (() => {
-        if (isLoading || insightLoading) {
-            return <Loading />
-        }
         return null
     })()
 
@@ -122,7 +117,12 @@ export function InsightContainer(): JSX.Element {
             filters.funnel_viz_type === FunnelVizType.Steps &&
             (!featureFlags[FEATURE_FLAGS.FUNNEL_VERTICAL_BREAKDOWN] || filters?.layout === FunnelLayout.horizontal)
         ) {
-            return <FunnelStepTable />
+            return (
+                <Card>
+                    <h3 className="l3">Details table</h3>
+                    <FunnelStepTable />
+                </Card>
+            )
         }
         if (
             (!filters.display ||
@@ -165,9 +165,7 @@ export function InsightContainer(): JSX.Element {
                     />
                 }
                 data-attr="insights-graph"
-                className={clsx('insights-graph-container', {
-                    funnels: activeView === InsightType.FUNNELS,
-                })}
+                className="insights-graph-container"
             >
                 <div>
                     <Row
@@ -176,10 +174,6 @@ export function InsightContainer(): JSX.Element {
                         })}
                         align="middle"
                         justify="space-between"
-                        style={{
-                            marginTop: -8,
-                            marginBottom: 16,
-                        }}
                     >
                         <Col>
                             <FunnelCanvasLabel />
@@ -187,19 +181,12 @@ export function InsightContainer(): JSX.Element {
                         </Col>
                         {lastRefresh && <ComputationTimeWithRefresh />}
                     </Row>
-                    {!BlockingEmptyState && CoexistingEmptyState}
-                    <div style={{ display: 'block' }}>
-                        {!!BlockingEmptyState ? BlockingEmptyState : VIEW_MAP[activeView]}
-                    </div>
+                    {!!BlockingEmptyState ? BlockingEmptyState : VIEW_MAP[activeView]}
                 </div>
             </Card>
             {renderTable()}
 
-            {preflight?.is_clickhouse_enabled &&
-            activeView === InsightType.FUNNELS &&
-            featureFlags[FEATURE_FLAGS.CORRELATION_ANALYSIS] ? (
-                <FunnelCorrelation />
-            ) : null}
+            {correlationAnalysisAvailable && activeView === InsightType.FUNNELS && <FunnelCorrelation />}
         </>
     )
 }

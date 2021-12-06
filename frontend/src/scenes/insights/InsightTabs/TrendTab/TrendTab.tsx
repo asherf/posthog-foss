@@ -42,16 +42,6 @@ export function TrendTab({ view }: TrendTabProps): JSX.Element {
     const formulaAvailable = isTrends && preflight?.is_clickhouse_enabled
     const formulaEnabled = (filters.events?.length || 0) + (filters.actions?.length || 0) > 0
 
-    const taxonomicTypes = isTrends
-        ? [
-              TaxonomicFilterGroupType.EventProperties,
-              TaxonomicFilterGroupType.PersonProperties,
-              ...groupsTaxonomicTypes,
-              TaxonomicFilterGroupType.Cohorts,
-              TaxonomicFilterGroupType.Elements,
-          ]
-        : undefined
-
     return (
         <>
             <Row gutter={16}>
@@ -65,6 +55,13 @@ export function TrendTab({ view }: TrendTabProps): JSX.Element {
                         showSeriesIndicator
                         singleFilter={filters.insight === InsightType.LIFECYCLE}
                         hideMathSelector={filters.insight === InsightType.LIFECYCLE}
+                        propertiesTaxonomicGroupTypes={[
+                            TaxonomicFilterGroupType.EventProperties,
+                            TaxonomicFilterGroupType.PersonProperties,
+                            ...groupsTaxonomicTypes,
+                            TaxonomicFilterGroupType.Cohorts,
+                            TaxonomicFilterGroupType.Elements,
+                        ]}
                         customRowPrefix={
                             filters.insight === InsightType.LIFECYCLE ? (
                                 <>
@@ -103,7 +100,16 @@ export function TrendTab({ view }: TrendTabProps): JSX.Element {
                     {filters.insight !== InsightType.LIFECYCLE && (
                         <>
                             <GlobalFiltersTitle />
-                            <PropertyFilters taxonomicGroupTypes={taxonomicTypes} pageKey="trends-filters" />
+                            <PropertyFilters
+                                taxonomicGroupTypes={[
+                                    TaxonomicFilterGroupType.EventProperties,
+                                    TaxonomicFilterGroupType.PersonProperties,
+                                    ...groupsTaxonomicTypes,
+                                    TaxonomicFilterGroupType.Cohorts,
+                                    TaxonomicFilterGroupType.Elements,
+                                ]}
+                                pageKey="trends-filters"
+                            />
                             <TestAccountFilter filters={filters} onChange={setFilters} />
                             {formulaAvailable && (
                                 <>

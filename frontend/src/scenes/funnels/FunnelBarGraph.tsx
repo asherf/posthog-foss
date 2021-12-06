@@ -1,11 +1,9 @@
 import React, { ForwardRefRenderFunction, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import useSize from '@react-hook/size'
 import { capitalizeFirstLetter, humanFriendlyDuration, pluralize } from 'lib/utils'
 import { PropertyKeyInfo } from 'lib/components/PropertyKeyInfo'
 import { Button, ButtonProps, Popover } from 'antd'
 import { ArrowRightOutlined, InfoCircleOutlined } from '@ant-design/icons'
-import { useResizeObserver } from 'lib/utils/responsiveUtils'
 import { SeriesGlyph } from 'lib/components/SeriesGlyph'
 import { ArrowBottomRightOutlined, IconInfinity } from 'lib/components/icons'
 import { funnelLogic } from './funnelLogic'
@@ -15,7 +13,6 @@ import { useActions, useValues } from 'kea'
 import { InsightTooltip } from 'scenes/insights/InsightTooltip/InsightTooltip'
 import { FEATURE_FLAGS, FunnelLayout } from 'lib/constants'
 import {
-    cleanBreakdownValue,
     formatDisplayPercentage,
     getBreakdownMaxIndex,
     getReferenceStep,
@@ -24,7 +21,7 @@ import {
     humanizeOrder,
     humanizeStepCount,
 } from './funnelUtils'
-import { StepOrderValue, FunnelStepWithConversionMetrics, FunnelStepReference } from '~/types'
+import { FunnelStepReference, StepOrderValue } from '~/types'
 import { Tooltip } from 'lib/components/Tooltip'
 import { FunnelStepTable } from 'scenes/insights/InsightTabs/FunnelTab/FunnelStepTable'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
@@ -32,6 +29,7 @@ import { EntityFilterInfo } from 'lib/components/EntityFilterInfo'
 import { getActionFilterFromFunnelStep } from 'scenes/insights/InsightTabs/FunnelTab/funnelStepTableUtils'
 import { FunnelStepDropdown } from './FunnelStepDropdown'
 import { insightLogic } from 'scenes/insights/insightLogic'
+import { useResizeObserver } from '../../lib/hooks/useResizeObserver'
 
 interface BarProps {
     percentage: number
@@ -68,145 +66,6 @@ function DuplicateStepIndicator(): JSX.Element {
                 <InfoCircleOutlined className="info-indicator" />
             </Tooltip>
         </span>
-    )
-}
-
-interface BreakdownBarGroupProps {
-    currentStep: FunnelStepWithConversionMetrics
-    basisStep: FunnelStepWithConversionMetrics
-    previousStep: FunnelStepWithConversionMetrics
-    showLabels: boolean
-    onBarClick?: (breakdown_value: string | undefined | number) => void
-    isClickable: boolean
-    isSingleSeries?: boolean
-    aggregationTargetLabel: { singular: string; plural: string }
-}
-
-export function BreakdownVerticalBarGroup({
-    currentStep,
-    basisStep,
-    previousStep,
-    showLabels,
-    onBarClick,
-    isClickable,
-    isSingleSeries = false,
-    aggregationTargetLabel,
-}: BreakdownBarGroupProps): JSX.Element {
-    const ref = useRef<HTMLDivElement | null>(null)
-    const [, height] = useSize(ref)
-    const barWidth = `calc(${100 / (currentStep?.nested_breakdown?.length ?? 1)}% - 2px)`
-
-    return (
-        <div className="breakdown-bar-group" ref={ref}>
-            {currentStep?.nested_breakdown?.map((breakdown, breakdownIndex) => {
-                const basisBreakdownCount = basisStep?.nested_breakdown?.[breakdownIndex]?.count ?? 1
-                const currentBarHeight = (height * breakdown.count) / basisBreakdownCount
-                const previousBarHeight =
-                    (height * (previousStep?.nested_breakdown?.[breakdownIndex]?.count ?? 0)) / basisBreakdownCount
-                const color = getSeriesColor(breakdown.order, isSingleSeries)
-
-                const popoverMetrics = [
-                    {
-                        title: 'Completed step',
-                        value: breakdown.count,
-                    },
-                    {
-                        title: 'Conversion rate (total)',
-                        value: formatDisplayPercentage(breakdown.conversionRates.total) + '%',
-                    },
-                    {
-                        title: `Conversion rate (from step ${humanizeOrder(previousStep.order)})`,
-                        value: formatDisplayPercentage(breakdown.conversionRates.fromPrevious) + '%',
-                        visible: currentStep.order !== 0,
-                    },
-                    {
-                        title: 'Dropped off',
-                        value: breakdown.droppedOffFromPrevious,
-                        visible: currentStep.order !== 0 && breakdown.droppedOffFromPrevious > 0,
-                    },
-                    {
-                        title: `Dropoff rate (from step ${humanizeOrder(previousStep.order)})`,
-                        value: formatDisplayPercentage(1 - breakdown.conversionRates.fromPrevious) + '%',
-                        visible: currentStep.order !== 0 && breakdown.droppedOffFromPrevious > 0,
-                    },
-                    {
-                        title: 'Average time on step',
-                        value: humanFriendlyDuration(breakdown.average_conversion_time),
-                        visible: !!breakdown.average_conversion_time,
-                    },
-                ]
-
-                return (
-                    <div
-                        key={breakdownIndex}
-                        className="breakdown-bar-column"
-                        style={{
-                            width: barWidth,
-                        }}
-                    >
-                        {currentStep.order > 0 && (
-                            <div
-                                className="breakdown-previous-bar"
-                                style={{
-                                    height: previousBarHeight,
-                                    backgroundColor: color,
-                                    width: barWidth,
-                                }}
-                            />
-                        )}
-                        <Popover
-                            trigger="hover"
-                            placement="right"
-                            content={
-                                <InsightTooltip
-                                    altTitle={
-                                        <div style={{ wordWrap: 'break-word' }}>
-                                            <PropertyKeyInfo value={currentStep.name} />
-                                            {(breakdown.breakdown_value === 'Baseline'
-                                                ? ''
-                                                : ` • ${breakdown.breakdown}`) ?? ' • Other'}
-                                        </div>
-                                    }
-                                >
-                                    {popoverMetrics.map(({ title, value, visible }, index) =>
-                                        visible !== false ? <MetricRow key={index} title={title} value={value} /> : null
-                                    )}
-                                </InsightTooltip>
-                            }
-                        >
-                            <div
-                                className="breakdown-current-bar"
-                                style={{
-                                    height: currentBarHeight,
-                                    backgroundColor: color,
-                                    width: barWidth,
-                                    cursor: isClickable ? 'pointer' : undefined,
-                                }}
-                                onClick={() => onBarClick && onBarClick(cleanBreakdownValue(breakdown.breakdown_value))}
-                            />
-                        </Popover>
-                        {showLabels && (
-                            <div
-                                className="breakdown-label"
-                                style={{
-                                    bottom: currentBarHeight + 4,
-                                    width: barWidth,
-                                }}
-                            >
-                                {breakdown.count > 0
-                                    ? `${humanizeStepCount(breakdown.count)} ${pluralize(
-                                          breakdown.count,
-                                          aggregationTargetLabel.singular,
-                                          aggregationTargetLabel.plural,
-                                          false
-                                      )}`
-                                    : ''}
-                            </div>
-                        )}
-                    </div>
-                )
-            })}
-        </div>
     )
 }
 
@@ -288,8 +147,8 @@ function Bar({
     }
 
     useResizeObserver({
-        callback: useThrottledCallback(decideLabelPosition, 200),
-        element: barRef,
+        onResize: useThrottledCallback(decideLabelPosition, 200),
+        ref: barRef,
     })
 
     return (
@@ -382,9 +241,15 @@ interface AverageTimeInspectorProps {
     onClick: (e?: React.MouseEvent) => void
     disabled?: boolean
     averageTime: number
+    aggregationTargetLabel: { singular: string; plural: string }
 }
 
-function AverageTimeInspector({ onClick, disabled, averageTime }: AverageTimeInspectorProps): JSX.Element {
+function AverageTimeInspector({
+    onClick,
+    disabled,
+    averageTime,
+    aggregationTargetLabel,
+}: AverageTimeInspectorProps): JSX.Element {
     // Inspector button which automatically shows/hides the info text.
     const wrapperRef = useRef<HTMLDivElement | null>(null)
     const infoTextRef = useRef<HTMLDivElement | null>(null)
@@ -411,8 +276,8 @@ function AverageTimeInspector({ onClick, disabled, averageTime }: AverageTimeIns
     }, [])
 
     useResizeObserver({
-        callback: useThrottledCallback(decideTextVisible, 200),
-        element: wrapperRef,
+        onResize: useThrottledCallback(decideTextVisible, 200),
+        ref: wrapperRef,
     })
 
     return (
@@ -429,7 +294,7 @@ function AverageTimeInspector({ onClick, disabled, averageTime }: AverageTimeIns
                 style={{ paddingLeft: 0, paddingRight: 0 }}
                 onClick={onClick}
                 disabled={disabled}
-                title="Average of time elapsed for each user between completing this step and starting the next one."
+                title={`Average of time elapsed for each ${aggregationTargetLabel.singular} between completing this step and starting the next one.`}
             >
                 {humanFriendlyDuration(averageTime, 2)}
             </ValueInspectorButton>
@@ -437,7 +302,7 @@ function AverageTimeInspector({ onClick, disabled, averageTime }: AverageTimeIns
     )
 }
 
-function MetricRow({ title, value }: { title: string; value: string | number }): JSX.Element {
+export function MetricRow({ title, value }: { title: string; value: string | number }): JSX.Element {
     return (
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
             <div>{title}</div>
@@ -459,12 +324,12 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
         barGraphLayout: layout,
         clickhouseFeaturesEnabled,
         aggregationTargetLabel,
+        isModalActive,
     } = useValues(logic)
-    const { openPersonsModal } = useActions(logic)
+    const { openPersonsModalForStep } = useActions(logic)
     const { featureFlags } = useValues(featureFlagLogic)
 
     // If the layout is vertical, we render bars using the table as a legend. See FunnelStepTable
-
     if (featureFlags[FEATURE_FLAGS.FUNNEL_VERTICAL_BREAKDOWN] && layout === FunnelLayout.vertical) {
         return <FunnelStepTable />
     }
@@ -513,10 +378,8 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                 <div className="funnel-step-title">
                                     {filters.funnel_order_type === StepOrderValue.UNORDERED ? (
                                         <span>Completed {humanizeOrder(step.order)} steps</span>
-                                    ) : featureFlags[FEATURE_FLAGS.RENAME_FILTERS] ? (
-                                        <EntityFilterInfo filter={getActionFilterFromFunnelStep(step)} />
                                     ) : (
-                                        <PropertyKeyInfo value={step.name} style={{ maxWidth: '100%' }} />
+                                        <EntityFilterInfo filter={getActionFilterFromFunnelStep(step)} />
                                     )}
                                 </div>
                                 {clickhouseFeaturesEnabled &&
@@ -530,6 +393,7 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                     <AverageTimeInspector
                                         onClick={() => {}}
                                         averageTime={step.average_conversion_time}
+                                        aggregationTargetLabel={aggregationTargetLabel}
                                         disabled
                                     />
                                 ) : null}
@@ -555,19 +419,20 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                                     percentage={barSizePercentage}
                                                     name={breakdown.name}
                                                     onBarClick={() =>
-                                                        openPersonsModal(
+                                                        openPersonsModalForStep({
                                                             step,
-                                                            stepIndex + 1,
-                                                            cleanBreakdownValue(breakdown.breakdown_value)
-                                                        )
+                                                            converted: true,
+                                                        })
                                                     }
-                                                    disabled={!!dashboardItemId}
+                                                    disabled={!isModalActive}
                                                     layout={layout}
                                                     popoverTitle={
                                                         <div style={{ wordWrap: 'break-word' }}>
                                                             <PropertyKeyInfo value={step.name} />
                                                             {' • '}
-                                                            {breakdown.breakdown || 'Other'}
+                                                            {(Array.isArray(breakdown.breakdown)
+                                                                ? breakdown.breakdown.join(', ')
+                                                                : breakdown.breakdown) || 'Other'}
                                                         </div>
                                                     }
                                                     popoverMetrics={[
@@ -633,11 +498,7 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                         })}
                                         <div
                                             className="funnel-bar-empty-space"
-                                            onClick={() =>
-                                                clickhouseFeaturesEnabled &&
-                                                !dashboardItemId &&
-                                                openPersonsModal(step, -(stepIndex + 1))
-                                            } // dropoff value for steps is negative
+                                            onClick={() => openPersonsModalForStep({ step, converted: false })} // dropoff value for steps is negative
                                             style={{
                                                 flex: `${1 - breakdownSum / basisStep.count} 1 0`,
                                                 cursor: `${
@@ -651,8 +512,8 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                         <Bar
                                             percentage={step.conversionRates.fromBasisStep}
                                             name={step.name}
-                                            onBarClick={() => openPersonsModal(step, stepIndex + 1)}
-                                            disabled={!!dashboardItemId}
+                                            onBarClick={() => openPersonsModalForStep({ step, converted: true })}
+                                            disabled={!isModalActive}
                                             layout={layout}
                                             popoverTitle={<PropertyKeyInfo value={step.name} />}
                                             popoverMetrics={[
@@ -705,11 +566,7 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                         />
                                         <div
                                             className="funnel-bar-empty-space"
-                                            onClick={() =>
-                                                clickhouseFeaturesEnabled &&
-                                                !dashboardItemId &&
-                                                openPersonsModal(step, -(stepIndex + 1))
-                                            } // dropoff value for steps is negative
+                                            onClick={() => openPersonsModalForStep({ step, converted: false })} // dropoff value for steps is negative
                                             style={{
                                                 flex: `${1 - step.conversionRates.fromBasisStep} 1 0`,
                                                 cursor: `${
@@ -726,8 +583,8 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                     <div className="step-stat">
                                         <div className="center-flex">
                                             <ValueInspectorButton
-                                                onClick={() => openPersonsModal(step, stepIndex + 1)}
-                                                disabled={!clickhouseFeaturesEnabled || !!dashboardItemId}
+                                                onClick={() => openPersonsModalForStep({ step, converted: true })}
+                                                disabled={!isModalActive}
                                             >
                                                 <span className="value-inspector-button-icon">
                                                     <ArrowRightOutlined style={{ color: 'var(--success)' }} />
@@ -767,8 +624,8 @@ export function FunnelBarGraph({ color = 'white' }: { color?: string }): JSX.Ele
                                     >
                                         <div className="center-flex">
                                             <ValueInspectorButton
-                                                onClick={() => openPersonsModal(step, -(stepIndex + 1))} // dropoff value from step 1 to 2 is -2, 2 to 3 is -3
-                                                disabled={!clickhouseFeaturesEnabled || !!dashboardItemId}
+                                                onClick={() => openPersonsModalForStep({ step, converted: false })}
+                                                disabled={!isModalActive}
                                             >
                                                 <span className="value-inspector-button-icon">
                                                     <ArrowBottomRightOutlined style={{ color: 'var(--danger)' }} />

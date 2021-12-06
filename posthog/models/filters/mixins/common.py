@@ -1,7 +1,8 @@
 import datetime
 import json
 import re
-from typing import Dict, List, Literal, Optional, Union, cast
+from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Optional, Union, cast
 
 from dateutil.relativedelta import relativedelta
 from django.db.models.query_utils import Q
@@ -15,6 +16,7 @@ from posthog.constants import (
     BREAKDOWN_LIMIT,
     BREAKDOWN_TYPE,
     BREAKDOWN_VALUE,
+    BREAKDOWNS,
     COMPARE,
     DATE_FROM,
     DATE_TO,
@@ -38,8 +40,8 @@ from posthog.constants import (
 )
 from posthog.models.entity import Entity, ExclusionEntity
 from posthog.models.filters.mixins.base import BaseParamMixin, BreakdownType, IntervalType
-from posthog.models.filters.mixins.groups import validate_group_type_index
 from posthog.models.filters.mixins.utils import cached_property, include_dict, process_bool
+from posthog.models.filters.utils import GroupTypeIndex, validate_group_type_index
 from posthog.utils import relative_date_parse
 
 ALLOWED_FORMULA_CHARACTERS = r"([a-zA-Z \-\*\^0-9\+\/\(\)]+)"
@@ -114,18 +116,32 @@ class FormulaMixin(BaseParamMixin):
 
 
 class BreakdownMixin(BaseParamMixin):
-    def _process_breakdown_param(self, breakdown: Optional[str]) -> Optional[Union[str, List[Union[str, int]]]]:
+    @cached_property
+    def breakdown(self) -> Optional[Union[str, List[Union[str, int]]]]:
+        breakdown = self._data.get(BREAKDOWN)
+
         if not isinstance(breakdown, str):
             return breakdown
+
         try:
             return json.loads(breakdown)
         except (TypeError, json.decoder.JSONDecodeError):
             return breakdown
 
     @cached_property
-    def breakdown(self) -> Optional[Union[str, List[Union[str, int]]]]:
-        breakdown = self._data.get(BREAKDOWN)
-        return self._process_breakdown_param(breakdown)
+    def breakdowns(self) -> Optional[List[Dict[str, Any]]]:
+        breakdowns = self._data.get(BREAKDOWNS)
+
+        try:
+            if isinstance(breakdowns, List):
+                return breakdowns
+            elif isinstance(breakdowns, str):
+                return json.loads(breakdowns)
+            else:
+                return breakdowns
+
+        except (TypeError, json.decoder.JSONDecodeError):
+            raise ValidationError(detail="breakdowns must be a list of items, each with property and type")
 
     @cached_property
     def _breakdown_limit(self) -> Optional[int]:
@@ -140,6 +156,8 @@ class BreakdownMixin(BaseParamMixin):
         result: Dict = {}
         if self.breakdown:
             result[BREAKDOWN] = self.breakdown
+        if self.breakdowns:
+            result[BREAKDOWNS] = self.breakdowns
         if self._breakdown_limit:
             result[BREAKDOWN_LIMIT] = self._breakdown_limit
 
@@ -150,7 +168,7 @@ class BreakdownMixin(BaseParamMixin):
         return self._data.get(BREAKDOWN_TYPE, None)
 
     @cached_property
-    def breakdown_group_type_index(self) -> Optional[int]:
+    def breakdown_group_type_index(self) -> Optional[GroupTypeIndex]:
         value = self._data.get(BREAKDOWN_GROUP_TYPE_INDEX, None)
         return validate_group_type_index(BREAKDOWN_GROUP_TYPE_INDEX, value)
 
@@ -295,9 +313,9 @@ class DateMixin(BaseParamMixin):
             return Q()
         if not date_from:
             date_from = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - relativedelta(days=7)
-        filter = Q(**{"{}__gte".format(field): date_from})
+        filter = Q(**{f"{field}__gte": date_from})
         if self.date_to:
-            filter &= Q(**{"{}__lte".format(field): self.date_to})
+            filter &= Q(**{f"{field}__lte": self.date_to})
         return filter
 
     @include_dict

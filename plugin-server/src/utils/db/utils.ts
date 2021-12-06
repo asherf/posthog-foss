@@ -232,6 +232,7 @@ export function generateKafkaPersonUpdateMessage(
     teamId: number,
     isIdentified: boolean,
     id: string,
+    version: number | null,
     isDeleted = 0
 ): ProducerRecord {
     return {
@@ -246,9 +247,40 @@ export function generateKafkaPersonUpdateMessage(
                         team_id: teamId,
                         is_identified: isIdentified,
                         is_deleted: isDeleted,
+                        ...(version ? { version } : {}),
                     })
                 ),
             },
         ],
     }
+}
+
+// Very useful for debugging queries
+export function getFinalPostgresQuery(queryString: string, values: any[]): string {
+    return queryString.replace(/\$([0-9]+)/g, (m, v) => JSON.stringify(values[parseInt(v) - 1]))
+}
+
+export function transformPostgresElementsToEventPayloadFormat(
+    rawElements: Record<string, any>[]
+): Record<string, any>[] {
+    const elementTransformations: Record<string, string> = {
+        text: '$el_text',
+        attr_class: 'attr__class',
+        attr_id: 'attr__id',
+        href: 'attr__href',
+    }
+
+    const elements = []
+    for (const element of rawElements) {
+        for (const [key, val] of Object.entries(element)) {
+            if (key in elementTransformations) {
+                element[elementTransformations[key]] = val
+                delete element[key]
+            }
+        }
+        delete element['attributes']
+        elements.push(element)
+    }
+
+    return elements
 }

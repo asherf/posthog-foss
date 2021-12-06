@@ -3,17 +3,17 @@ import { Checkbox, Dropdown, Menu, Radio, Space } from 'antd'
 import { dashboardLogic } from 'scenes/dashboard/dashboardLogic'
 import { DownOutlined, LoadingOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useActions, useValues } from 'kea'
-import dayjs from 'dayjs'
 import { humanFriendlyDuration } from 'lib/utils'
 import clsx from 'clsx'
 import { Tooltip } from 'lib/components/Tooltip'
+import { dayjs } from 'lib/dayjs'
 
 export const LastRefreshText = (): JSX.Element => {
     const { lastRefreshed } = useValues(dashboardLogic)
     return (
-        <>
+        <span>
             Last updated <b>{lastRefreshed ? dayjs(lastRefreshed).fromNow() : 'a while ago'}</b>
-        </>
+        </span>
     )
 }
 

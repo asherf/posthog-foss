@@ -1,8 +1,10 @@
-from typing import Optional
+from typing import Any, Literal, Optional
 
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 
 from posthog.constants import (
+    GROUP_TYPES_LIMIT,
     INSIGHT_FUNNELS,
     INSIGHT_PATHS,
     INSIGHT_RETENTION,
@@ -10,8 +12,9 @@ from posthog.constants import (
     INSIGHT_STICKINESS,
     INSIGHT_TRENDS,
 )
-from posthog.models.filters.path_filter import PathFilter
 from posthog.utils import is_clickhouse_enabled
+
+GroupTypeIndex = Literal[0, 1, 2, 3, 4]
 
 
 def earliest_timestamp_func(team_id: int):
@@ -26,6 +29,7 @@ def earliest_timestamp_func(team_id: int):
 
 def get_filter(team, data: dict = {}, request: Optional[Request] = None):
     from posthog.models.filters.filter import Filter
+    from posthog.models.filters.path_filter import PathFilter
     from posthog.models.filters.retention_filter import RetentionFilter
     from posthog.models.filters.sessions_filter import SessionsFilter
     from posthog.models.filters.stickiness_filter import StickinessFilter
@@ -46,3 +50,22 @@ def get_filter(team, data: dict = {}, request: Optional[Request] = None):
             data={**data, **(request.data if request else {}), "insight": INSIGHT_FUNNELS}, request=request, team=team
         )
     return Filter(data=data, request=request, team=team)
+
+
+def validate_group_type_index(param_name: str, value: Any, required=False) -> Optional[GroupTypeIndex]:
+    error = ValidationError(
+        f"{param_name} is required to be greater than 0 and less than {GROUP_TYPES_LIMIT}", code="invalid"
+    )
+
+    if required and value is None:
+        raise error
+
+    if value is not None:
+        try:
+            value = int(value)
+        except:
+            raise error
+        if not (0 <= value < GROUP_TYPES_LIMIT):
+            raise error
+
+    return value

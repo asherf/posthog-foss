@@ -1,12 +1,11 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { LineGraph } from '../../insights/LineGraph'
 import { useActions, useValues } from 'kea'
 import { trendsLogic } from 'scenes/trends/trendsLogic'
-import { LineGraphEmptyState } from '../../insights/EmptyStates'
+import { InsightEmptyState } from '../../insights/EmptyStates'
 import { ACTIONS_BAR_CHART } from 'lib/constants'
 import { ChartParams } from '~/types'
 import { InsightType } from '~/types'
-import { router } from 'kea-router'
 import { personsModalLogic } from '../personsModalLogic'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { isMultiSeriesFormula } from 'lib/utils'
@@ -21,7 +20,6 @@ export function ActionsLineGraph({
     const logic = trendsLogic(insightProps)
     const { filters, indexedResults, visibilityMap } = useValues(logic)
     const { loadPeople, loadPeopleFromUrl } = useActions(personsModalLogic)
-    const [{ fromItem }] = useState(router.values.hashParams)
 
     return indexedResults &&
         indexedResults[0]?.data &&
@@ -34,7 +32,7 @@ export function ActionsLineGraph({
             visibilityMap={visibilityMap}
             labels={(indexedResults[0] && indexedResults[0].labels) || []}
             isInProgress={!filters.date_to}
-            dashboardItemId={dashboardItemId || fromItem /* used only for annotations, not to init any other logic */}
+            dashboardItemId={dashboardItemId}
             inSharedMode={inSharedMode}
             interval={filters.interval}
             showPersonsModal={showPersonsModal}
@@ -68,6 +66,6 @@ export function ActionsLineGraph({
             }
         />
     ) : (
-        <LineGraphEmptyState color={color} isDashboard={!!dashboardItemId} />
+        <InsightEmptyState color={color} isDashboard={!!dashboardItemId} />
     )
 }

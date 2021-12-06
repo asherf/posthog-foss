@@ -2,39 +2,41 @@ import { BreakPointFunction, kea } from 'kea'
 import equal from 'fast-deep-equal'
 import api from 'lib/api'
 import { insightLogic } from 'scenes/insights/insightLogic'
-import { average, eventToName, successToast, sum } from 'lib/utils'
+import { autoCaptureEventToDescription, average, successToast, sum } from 'lib/utils'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { funnelLogicType } from './funnelLogicType'
 import {
-    FilterType,
-    FunnelVizType,
-    FunnelStep,
-    FunnelsTimeConversionBins,
-    PersonType,
-    InsightType,
-    FunnelStepWithNestedBreakdown,
-    FunnelTimeConversionMetrics,
-    FlattenedFunnelStep,
-    FunnelStepWithConversionMetrics,
-    BinCountValue,
-    FunnelConversionWindowTimeUnit,
-    FunnelStepRangeEntityFilter,
-    InsightLogicProps,
-    FlattenedFunnelStepByBreakdown,
-    FunnelCorrelation,
-    FunnelCorrelationType,
-    FunnelStepReference,
-    FunnelAPIResponse,
-    TrendResult,
-    FunnelCorrelationResultsType,
     AvailableFeature,
-    TeamType,
+    BinCountValue,
+    BreakdownKeyType,
     EntityTypes,
+    FilterType,
+    FlattenedFunnelStep,
+    FlattenedFunnelStepByBreakdown,
+    FunnelAPIResponse,
+    FunnelConversionWindowTimeUnit,
+    FunnelCorrelation,
+    FunnelCorrelationResultsType,
+    FunnelCorrelationType,
+    FunnelStep,
+    FunnelStepRangeEntityFilter,
+    FunnelStepReference,
+    FunnelStepWithConversionMetrics,
+    FunnelStepWithNestedBreakdown,
+    FunnelsTimeConversionBins,
+    FunnelTimeConversionMetrics,
+    FunnelVizType,
+    InsightLogicProps,
+    InsightType,
+    ItemMode,
+    PersonType,
     PropertyFilter,
     PropertyOperator,
-    BreakdownType,
+    StepOrderValue,
+    TeamType,
+    TrendResult,
 } from '~/types'
-import { FunnelLayout, BinCountAuto, FEATURE_FLAGS } from 'lib/constants'
+import { BinCountAuto, FEATURE_FLAGS, FunnelLayout } from 'lib/constants'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import {
     aggregateBreakdownResult,
@@ -47,6 +49,7 @@ import {
     isBreakdownFunnelResults,
     isStepsEmpty,
     isValidBreakdownParameter,
+    getBreakdownStepValues,
 } from './funnelUtils'
 import { personsModalLogic } from 'scenes/trends/personsModalLogic'
 import { dashboardsModel } from '~/models/dashboardsModel'
@@ -55,6 +58,7 @@ import { cleanFilters } from 'scenes/insights/utils/cleanFilters'
 import { keyForInsightLogicProps } from 'scenes/insights/sharedUtils'
 import { teamLogic } from '../teamLogic'
 import { personPropertiesModel } from '~/models/personPropertiesModel'
+import { groupPropertiesModel } from '~/models/groupPropertiesModel'
 import { userLogic } from 'scenes/userLogic'
 import { visibilitySensorLogic } from 'lib/components/VisibilitySensor/visibilitySensorLogic'
 import { elementsToAction } from 'scenes/events/createActionFromEvent'
@@ -89,7 +93,12 @@ export const DEFAULT_EXCLUDED_PERSON_PROPERTIES = [
     '$initial_geoip_subdivision_name',
 ]
 
-export const funnelLogic = kea<funnelLogicType>({
+type openPersonsModelProps = {
+    step: FunnelStep
+    converted: boolean
+}
+
+export const funnelLogic = kea<funnelLogicType<openPersonsModelProps>>({
     path: (key) => ['scenes', 'funnels', 'funnelLogic', key],
     props: {} as InsightLogicProps,
     key: keyForInsightLogicProps('insight_funnel'),
@@ -97,7 +106,7 @@ export const funnelLogic = kea<funnelLogicType>({
     connect: (props: InsightLogicProps) => ({
         values: [
             insightLogic(props),
-            ['filters', 'insight', 'insightLoading'],
+            ['filters', 'insight', 'insightLoading', 'insightMode'],
             teamLogic,
             ['currentTeamId', 'currentTeam'],
             personPropertiesModel,
@@ -108,6 +117,8 @@ export const funnelLogic = kea<funnelLogicType>({
             ['featureFlags'],
             groupsModel,
             ['groupTypes'],
+            groupPropertiesModel,
+            ['groupProperties'],
         ],
         actions: [insightLogic(props), ['loadResults', 'loadResultsSuccess']],
         logic: [eventUsageLogic, dashboardsModel],
@@ -115,7 +126,7 @@ export const funnelLogic = kea<funnelLogicType>({
 
     actions: () => ({
         clearFunnel: true,
-        setFilters: (filters: Partial<FilterType>, refresh = false, mergeWithExisting = true) => ({
+        setFilters: (filters: Partial<FilterType>, refresh: boolean = false, mergeWithExisting: boolean = true) => ({
             filters,
             refresh,
             mergeWithExisting,
@@ -126,20 +137,9 @@ export const funnelLogic = kea<funnelLogicType>({
             index,
         }),
         saveFunnelInsight: (name: string) => ({ name }),
-        openPersonsModal: (
-            step: FunnelStep | FunnelStepWithNestedBreakdown,
-            stepNumber: number,
-            breakdown_value?: string | number,
-            breakdown?: string,
-            breakdown_type?: BreakdownType,
-            customSteps?: number[]
-        ) => ({
+        openPersonsModalForStep: ({ step, converted }: openPersonsModelProps) => ({
             step,
-            stepNumber,
-            breakdown_value,
-            breakdown,
-            breakdown_type,
-            customSteps,
+            converted,
         }),
         openCorrelationPersonsModal: (correlation: FunnelCorrelation, success: boolean) => ({
             correlation,
@@ -153,8 +153,9 @@ export const funnelLogic = kea<funnelLogicType>({
         setIsGroupingOutliers: (isGroupingOutliers) => ({ isGroupingOutliers }),
         setBinCount: (binCount: BinCountValue) => ({ binCount }),
         toggleVisibility: (index: string) => ({ index }),
-        toggleVisibilityByBreakdown: (breakdownValue?: number | string) => ({ breakdownValue }),
+        toggleVisibilityByBreakdown: (breakdownValue?: BreakdownKeyType) => ({ breakdownValue }),
         setHiddenById: (entry: Record<string, boolean | undefined>) => ({ entry }),
+        toggleAdvancedMode: true,
 
         // Correlation related actions
         setCorrelationTypes: (types: FunnelCorrelationType[]) => ({ types }),
@@ -173,6 +174,8 @@ export const funnelLogic = kea<funnelLogicType>({
 
         addNestedTableExpandedKey: (expandKey: string) => ({ expandKey }),
         removeNestedTableExpandedKey: (expandKey: string) => ({ expandKey }),
+
+        setFunnelCorrelationDetails: (payload: FunnelCorrelation | null) => ({ payload }),
     }),
 
     loaders: ({ values }) => ({
@@ -342,7 +345,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 return {}
             },
         },
-
         propertyNames: [
             [] as string[],
             {
@@ -352,7 +354,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 },
             },
         ],
-
         nestedTableExpandedKeys: [
             [] as string[],
             {
@@ -391,6 +392,12 @@ export const funnelLogic = kea<funnelLogicType>({
                 },
             },
         ],
+        funnelCorrelationDetails: [
+            null as null | FunnelCorrelation,
+            {
+                setFunnelCorrelationDetails: (_, { payload }) => payload,
+            },
+        ],
     }),
 
     selectors: ({ selectors }) => ({
@@ -398,7 +405,25 @@ export const funnelLogic = kea<funnelLogicType>({
         loadedFilters: [(s) => [s.insight], ({ filters }) => (filters?.insight === InsightType.FUNNELS ? filters : {})],
         results: [
             (s) => [s.insight],
-            ({ filters, result }): FunnelAPIResponse => (filters?.insight === InsightType.FUNNELS ? result : []),
+            ({ filters, result }): FunnelAPIResponse => {
+                if (filters?.insight === InsightType.FUNNELS) {
+                    if (Array.isArray(result) && Array.isArray(result[0]) && result[0][0].breakdowns) {
+                        // in order to stop the UI having to check breakdowns and breakdown
+                        // this collapses breakdowns onto the breakdown property
+                        return result.map((series) =>
+                            series.map((r: { [x: string]: any; breakdowns: any; breakdown_value: any }) => {
+                                const { breakdowns, breakdown_value, ...singlePropertyClone } = r
+                                singlePropertyClone.breakdown = breakdowns
+                                singlePropertyClone.breakdown_value = breakdown_value
+                                return singlePropertyClone
+                            })
+                        )
+                    }
+                    return result
+                } else {
+                    return []
+                }
+            },
         ],
         resultsLoading: [(s) => [s.insightLoading], (insightLoading) => insightLoading],
         conversionWindow: [
@@ -407,13 +432,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 funnel_window_interval: funnel_window_interval || 14,
                 funnel_window_interval_unit: funnel_window_interval_unit || FunnelConversionWindowTimeUnit.Day,
             }),
-        ],
-        stepResults: [
-            (s) => [s.results, s.filters],
-            (results, filters) =>
-                filters.funnel_viz_type !== FunnelVizType.TimeToConvert
-                    ? (results as FunnelStep[] | FunnelStep[][])
-                    : [],
         ],
         timeConversionResults: [
             (s) => [s.results, s.filters],
@@ -517,7 +535,8 @@ export const funnelLogic = kea<funnelLogicType>({
                     }
                 }
 
-                // Handle metrics for steps and trends
+                // Handle metrics for steps
+                // no concept of funnel_from_step and funnel_to_step here
                 if (stepsWithCount.length <= 1) {
                     return {
                         averageTime: 0,
@@ -526,16 +545,14 @@ export const funnelLogic = kea<funnelLogicType>({
                     }
                 }
 
-                const isAllSteps = loadedFilters.funnel_from_step === -1
-                const fromStep = isAllSteps
-                    ? getReferenceStep(stepsWithCount, FunnelStepReference.total)
-                    : stepsWithCount[loadedFilters.funnel_from_step ?? 0]
-                const toStep = isAllSteps
-                    ? getLastFilledStep(stepsWithCount)
-                    : stepsWithCount[loadedFilters.funnel_to_step ?? 0]
+                const toStep = getLastFilledStep(stepsWithCount)
+                const fromStep = getReferenceStep(stepsWithCount, FunnelStepReference.total)
 
                 return {
-                    averageTime: toStep?.average_conversion_time || 0,
+                    averageTime: stepsWithCount.reduce(
+                        (conversion_time, step) => conversion_time + (step.average_conversion_time || 0),
+                        0
+                    ),
                     stepRate: toStep.count / fromStep.count,
                     totalRate: stepsWithCount[stepsWithCount.length - 1].count / stepsWithCount[0].count,
                 }
@@ -570,29 +587,40 @@ export const funnelLogic = kea<funnelLogicType>({
         eventCount: [() => [selectors.apiParams], (apiParams) => apiParams.events?.length || 0],
         actionCount: [() => [selectors.apiParams], (apiParams) => apiParams.actions?.length || 0],
         interval: [() => [selectors.apiParams], (apiParams) => apiParams.interval || ''],
-        stepsWithNestedBreakdown: [
-            () => [selectors.stepResults, selectors.apiParams],
-            (results, params) => {
-                if (isBreakdownFunnelResults(results) && isValidBreakdownParameter(params.breakdown)) {
-                    return aggregateBreakdownResult(results, params.breakdown ?? undefined).sort(
+        steps: [
+            (s) => [s.filters, s.results, s.apiParams],
+            (filters: Partial<FilterType>, results: FunnelAPIResponse, apiParams): FunnelStepWithNestedBreakdown[] => {
+                const stepResults =
+                    filters.funnel_viz_type !== FunnelVizType.TimeToConvert
+                        ? (results as FunnelStep[] | FunnelStep[][])
+                        : []
+
+                if (!Array.isArray(stepResults)) {
+                    return []
+                }
+
+                let stepsWithNestedBreakdown: FunnelStepWithNestedBreakdown[] = []
+                if (
+                    isBreakdownFunnelResults(results) &&
+                    isValidBreakdownParameter(apiParams.breakdown, apiParams.breakdowns)
+                ) {
+                    const breakdownProperty = apiParams.breakdowns
+                        ? apiParams.breakdowns.map((b) => b.property).join('::')
+                        : apiParams.breakdown ?? undefined
+                    stepsWithNestedBreakdown = aggregateBreakdownResult(results, breakdownProperty).sort(
                         (a, b) => a.order - b.order
                     )
                 }
-                return []
-            },
-        ],
-        steps: [
-            () => [selectors.stepResults, selectors.stepsWithNestedBreakdown, selectors.filters],
-            (results, stepsWithNestedBreakdown, filters): FunnelStepWithNestedBreakdown[] => {
-                if (!Array.isArray(results)) {
-                    return []
-                }
-                return !!filters.breakdown
+
+                return !!filters.breakdowns || !!filters.breakdown
                     ? stepsWithNestedBreakdown
-                    : ([...results] as FunnelStep[]).sort((a, b) => a.order - b.order)
+                    : ([...stepResults] as FunnelStep[]).sort((a, b) => a.order - b.order)
             },
         ],
-        stepsWithCount: [() => [selectors.steps], (steps) => steps.filter((step) => typeof step.count === 'number')],
+        stepsWithCount: [
+            () => [selectors.steps],
+            (steps) => steps.filter((step) => typeof step.count === 'number' && step.count > 0),
+        ],
         stepsWithConversionMetrics: [
             () => [selectors.steps, selectors.stepReference],
             (steps, stepReference): FunnelStepWithConversionMetrics[] => {
@@ -760,7 +788,6 @@ export const funnelLogic = kea<funnelLogicType>({
                     { rowKey: 'graph' },
                     { rowKey: 'table-header' },
                 ]
-
                 if (steps.length > 0) {
                     const baseStep = steps[0]
                     const lastStep = steps[steps.length - 1]
@@ -770,10 +797,8 @@ export const funnelLogic = kea<funnelLogicType>({
                     // Baseline - total step to step metrics, only add if more than 1 breakdown or not breakdown
                     if (hasBaseline) {
                         flattenedStepsByBreakdown.push({
-                            rowKey: 'baseline',
+                            ...getBreakdownStepValues(baseStep, 0, true),
                             isBaseline: true,
-                            breakdown: (baseStep.breakdown as string) ?? 'baseline',
-                            breakdown_value: 'Baseline',
                             breakdownIndex: 0,
                             steps: steps.map((s) =>
                                 Object.assign({}, s, { nested_breakdown: undefined, breakdown_value: 'Baseline' })
@@ -791,10 +816,8 @@ export const funnelLogic = kea<funnelLogicType>({
                                 .map((s) => s.nested_breakdown?.[i] as FunnelStepWithConversionMetrics)
                             const offset = hasBaseline ? 1 : 0
                             flattenedStepsByBreakdown.push({
-                                rowKey: breakdownStep.breakdown_value ?? i + offset,
+                                ...getBreakdownStepValues(breakdownStep, i + offset),
                                 isBaseline: false,
-                                breakdown: (breakdownStep.breakdown as string | number) || 'Other',
-                                breakdown_value: breakdownStep.breakdown_value || 'Other',
                                 breakdownIndex: i + offset,
                                 steps: stepsInBreakdown,
                                 conversionRates: {
@@ -957,7 +980,10 @@ export const funnelLogic = kea<funnelLogicType>({
                         return { first_value, second_value }
                     } else if (values[0] === '$autocapture' && values[1] === 'elements_chain') {
                         // special case for autocapture elements_chain
-                        first_value = eventToName({ ...record.event, event: '$autocapture' })
+                        first_value = autoCaptureEventToDescription({
+                            ...record.event,
+                            event: '$autocapture',
+                        }) as string
                         return { first_value, second_value }
                     } else {
                         // FunnelCorrelationResultsType.EventWithProperties
@@ -1002,19 +1028,21 @@ export const funnelLogic = kea<funnelLogicType>({
             (currentTeam) => currentTeam?.correlation_config?.excluded_event_property_names || [],
         ],
         inversePropertyNames: [
-            (s) => [s.personProperties],
-            (personProperties) => (excludedPersonProperties: string[]) => {
-                return personProperties
+            (s) => [s.filters, s.personProperties, s.groupProperties],
+            (filters, personProperties, groupProperties) => (excludedPersonProperties: string[]) => {
+                const targetProperties =
+                    filters.aggregation_group_type_index !== undefined
+                        ? groupProperties(filters.aggregation_group_type_index)
+                        : personProperties
+                return targetProperties
                     .map((property) => property.name)
                     .filter((property) => !excludedPersonProperties.includes(property))
             },
         ],
         correlationAnalysisAvailable: [
-            (s) => [s.hasAvailableFeature, s.clickhouseFeaturesEnabled, s.featureFlags],
-            (hasAvailableFeature, clickhouseFeaturesEnabled, featureFlags) =>
-                featureFlags[FEATURE_FLAGS.CORRELATION_ANALYSIS] &&
-                clickhouseFeaturesEnabled &&
-                hasAvailableFeature(AvailableFeature.CORRELATION_ANALYSIS),
+            (s) => [s.hasAvailableFeature, s.clickhouseFeaturesEnabled],
+            (hasAvailableFeature, clickhouseFeaturesEnabled): boolean =>
+                clickhouseFeaturesEnabled && hasAvailableFeature(AvailableFeature.CORRELATION_ANALYSIS),
         ],
         allProperties: [
             (s) => [s.inversePropertyNames, s.excludedPropertyNames],
@@ -1024,13 +1052,83 @@ export const funnelLogic = kea<funnelLogicType>({
         ],
         aggregationTargetLabel: [
             (s) => [s.filters, s.groupTypes],
-            (filters, groupTypes): { singular: string; plural: string } => {
+            (
+                filters,
+                groupTypes
+            ): {
+                singular: string
+                plural: string
+            } => {
                 if (filters.aggregation_group_type_index != undefined && groupTypes.length > 0) {
                     const groupType = groupTypes[filters.aggregation_group_type_index]
                     return { singular: groupType.group_type, plural: `${groupType.group_type}(s)` }
                 }
                 return { singular: 'user', plural: 'users' }
             },
+        ],
+        correlationMatrixAndScore: [
+            (s) => [s.funnelCorrelationDetails, s.steps],
+            (
+                funnelCorrelationDetails,
+                steps
+            ): {
+                truePositive: number
+                falsePositive: number
+                trueNegative: number
+                falseNegative: number
+                correlationScore: number
+            } => {
+                if (!funnelCorrelationDetails) {
+                    return {
+                        truePositive: 0,
+                        falsePositive: 0,
+                        trueNegative: 0,
+                        falseNegative: 0,
+                        correlationScore: 0,
+                    }
+                }
+
+                const successTotal = steps[steps.length - 1].count
+                const failureTotal = steps[0].count - successTotal
+                const success = funnelCorrelationDetails.success_count
+                const failure = funnelCorrelationDetails.failure_count
+
+                const truePositive = success // has property, converted
+                const falseNegative = failure // has property, but dropped off
+                const trueNegative = failureTotal - failure // doesn't have property, dropped off
+                const falsePositive = successTotal - success // doesn't have property, converted
+
+                // Phi coefficient: https://en.wikipedia.org/wiki/Phi_coefficient
+                const correlationScore =
+                    (truePositive * trueNegative - falsePositive * falseNegative) /
+                    Math.sqrt(
+                        (truePositive + falsePositive) *
+                            (truePositive + falseNegative) *
+                            (trueNegative + falsePositive) *
+                            (trueNegative + falseNegative)
+                    )
+                return { correlationScore, truePositive, falsePositive, trueNegative, falseNegative }
+            },
+        ],
+        advancedOptionsUsedCount: [
+            (s) => [s.filters, s.stepReference],
+            (filters: FilterType, stepReference: FunnelStepReference): number => {
+                let count = 0
+                if (filters.funnel_order_type && filters.funnel_order_type !== StepOrderValue.ORDERED) {
+                    count = count + 1
+                }
+                if (stepReference !== FunnelStepReference.total) {
+                    count = count + 1
+                }
+                if (filters.exclusions?.length) {
+                    count = count + 1
+                }
+                return count
+            },
+        ],
+        isModalActive: [
+            (s) => [s.insightMode, s.clickhouseFeaturesEnabled, s.filters],
+            (insightMode, clickhouseFeaturesEnabled) => clickhouseFeaturesEnabled && insightMode === ItemMode.Edit,
         ],
     }),
 
@@ -1057,7 +1155,7 @@ export const funnelLogic = kea<funnelLogicType>({
             }
 
             // load correlation table after funnel. Maybe parallel?
-            if (values.correlationAnalysisAvailable) {
+            if (values.correlationAnalysisAvailable && insight.filters?.funnel_viz_type === FunnelVizType.Steps) {
                 actions.loadCorrelations()
                 actions.setPropertyNames(values.allProperties) // select all properties by default
             }
@@ -1066,7 +1164,6 @@ export const funnelLogic = kea<funnelLogicType>({
             values.visibleStepsWithConversionMetrics?.forEach((step) => {
                 const key = getVisibilityIndex(step, breakdownValue)
                 const currentIsHidden = !!values.hiddenLegendKeys?.[key]
-
                 actions.setHiddenById({ [key]: currentIsHidden ? undefined : true })
             })
         },
@@ -1127,20 +1224,24 @@ export const funnelLogic = kea<funnelLogicType>({
                 saved: true,
             })
         },
-        openPersonsModal: ({ step, stepNumber, breakdown_value, breakdown, breakdown_type, customSteps }) => {
-            // :TODO: Support 'person' modal for groups
-            if (values.filters.aggregation_group_type_index != undefined) {
+        openPersonsModalForStep: ({ step, converted }) => {
+            if (!values.isModalActive) {
                 return
             }
-            personsModalLogic.actions.loadPeople({
-                action: 'session',
-                breakdown_value: breakdown_value !== undefined ? breakdown_value : undefined,
+
+            const funnelStep = converted ? step.order : -step.order
+            const breakdownValues = getBreakdownStepValues(step, funnelStep)
+
+            personsModalLogic.actions.loadPeopleFromUrl({
+                url: converted ? step.converted_people_url : step.dropped_people_url,
+                // NOTE: although we have the url that contains all of the info needed
+                // to return people, we currently still need to pass something in for the
+                // purpose of the modal displaying the label.
+                funnelStep: converted ? step.order : -step.order,
+                breakdown_value: breakdownValues.isEmpty ? undefined : breakdownValues.breakdown_value.join(', '),
                 label: step.name,
-                date_from: '',
-                date_to: '',
-                filters: { ...values.filters, breakdown, breakdown_type, funnel_custom_steps: customSteps },
-                saveOriginal: true,
-                funnelStep: stepNumber,
+                // NOTE: session value copied from previous code, not clear that this should be the case
+                action: 'session',
             })
         },
         openCorrelationPersonsModal: ({ correlation, success }) => {
@@ -1197,7 +1298,9 @@ export const funnelLogic = kea<funnelLogicType>({
         setConversionWindow: async () => {
             actions.setFilters(values.conversionWindow)
         },
-
+        toggleAdvancedMode: () => {
+            actions.setFilters({ funnel_advanced: !values.filters.funnel_advanced })
+        },
         excludeEventPropertyFromProject: async ({ propertyName }) => {
             appendToCorrelationConfig('excluded_event_property_names', values.excludedEventPropertyNames, propertyName)
 
@@ -1209,7 +1312,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 }
             )
         },
-
         excludeEventFromProject: async ({ eventName }) => {
             appendToCorrelationConfig('excluded_event_names', values.excludedEventNames, eventName)
 
@@ -1217,7 +1319,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 event_name: eventName,
             })
         },
-
         excludePropertyFromProject: ({ propertyName }) => {
             appendToCorrelationConfig('excluded_person_property_names', values.excludedPropertyNames, propertyName)
 
@@ -1229,14 +1330,12 @@ export const funnelLogic = kea<funnelLogicType>({
                 }
             )
         },
-
         hideSkewWarning: () => {
             eventUsageLogic.actions.reportCorrelationInteraction(
                 FunnelCorrelationResultsType.Events,
                 'hide skew warning'
             )
         },
-
         setCorrelationTypes: ({ types }) => {
             eventUsageLogic.actions.reportCorrelationInteraction(
                 FunnelCorrelationResultsType.Events,
@@ -1244,7 +1343,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 { types }
             )
         },
-
         setPropertyCorrelationTypes: ({ types }) => {
             eventUsageLogic.actions.reportCorrelationInteraction(
                 FunnelCorrelationResultsType.Properties,
@@ -1252,7 +1350,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 { types }
             )
         },
-
         setPropertyNames: async ({ propertyNames }) => {
             actions.loadPropertyCorrelations()
             eventUsageLogic.actions.reportCorrelationInteraction(
@@ -1261,7 +1358,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 { property_names: propertyNames.length === values.allProperties.length ? '$all' : propertyNames }
             )
         },
-
         sendCorrelationAnalysisFeedback: () => {
             eventUsageLogic.actions.reportCorrelationAnalysisDetailedFeedback(
                 values.correlationFeedbackRating,
@@ -1279,12 +1375,15 @@ export const funnelLogic = kea<funnelLogicType>({
                 eventUsageLogic.actions.reportCorrelationAnalysisFeedback(rating)
             }
         },
-
         [visibilitySensorLogic({ id: values.correlationPropKey }).actionTypes.setVisible]: async (
-            { visible }: { visible: boolean },
+            {
+                visible,
+            }: {
+                visible: boolean
+            },
             breakpoint: BreakPointFunction
         ) => {
-            if (visible && values.shouldReportCorrelationViewed) {
+            if (visible && values.correlationAnalysisAvailable && values.shouldReportCorrelationViewed) {
                 eventUsageLogic.actions.reportCorrelationViewed(values.filters, 0)
                 await breakpoint(10000)
                 eventUsageLogic.actions.reportCorrelationViewed(values.filters, 10)
@@ -1292,10 +1391,14 @@ export const funnelLogic = kea<funnelLogicType>({
         },
 
         [visibilitySensorLogic({ id: `${values.correlationPropKey}-properties` }).actionTypes.setVisible]: async (
-            { visible }: { visible: boolean },
+            {
+                visible,
+            }: {
+                visible: boolean
+            },
             breakpoint: BreakPointFunction
         ) => {
-            if (visible && values.shouldReportPropertyCorrelationViewed) {
+            if (visible && values.correlationAnalysisAvailable && values.shouldReportPropertyCorrelationViewed) {
                 eventUsageLogic.actions.reportCorrelationViewed(values.filters, 0, true)
                 await breakpoint(10000)
                 eventUsageLogic.actions.reportCorrelationViewed(values.filters, 10, true)
@@ -1337,7 +1440,12 @@ const appendToCorrelationConfig = (
     })
 }
 
-const parseBreakdownValue = (item: string): { breakdown: string; breakdown_value: string } => {
+const parseBreakdownValue = (
+    item: string
+): {
+    breakdown: string
+    breakdown_value: string
+} => {
     const components = item.split('::')
     if (components.length === 1) {
         return { breakdown: components[0], breakdown_value: '' }
@@ -1349,7 +1457,12 @@ const parseBreakdownValue = (item: string): { breakdown: string; breakdown_value
     }
 }
 
-const parseEventAndProperty = (event: FunnelCorrelation['event']): { name: string; properties?: PropertyFilter[] } => {
+const parseEventAndProperty = (
+    event: FunnelCorrelation['event']
+): {
+    name: string
+    properties?: PropertyFilter[]
+} => {
     const components = event.event.split('::')
     /*
       The `event` is either an event name, or event::property::property_value

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union, cast
 
-from django.db.models import Count, Func, Prefetch, Q, QuerySet
+from django.db.models import Count, Func, Q, QuerySet
 from django_filters import rest_framework as filters
 from rest_framework import request, response, serializers, viewsets
 from rest_framework.decorators import action
@@ -12,23 +12,32 @@ from rest_framework.utils.serializer_helpers import ReturnDict
 from rest_framework_csv import renderers as csvrenderers
 
 from posthog.api.routing import StructuredViewSetMixin
-from posthog.api.utils import format_next_url, get_target_entity
-from posthog.constants import TRENDS_TABLE
+from posthog.api.utils import format_paginated_url, get_target_entity
+from posthog.constants import LIMIT, TRENDS_TABLE
 from posthog.models import Cohort, Event, Filter, Person, User
 from posthog.models.filters import RetentionFilter
 from posthog.models.filters.stickiness_filter import StickinessFilter
 from posthog.permissions import ProjectMembershipNecessaryPermissions, TeamMemberAccessPermission
-from posthog.queries.base import filter_persons, properties_to_Q
+from posthog.queries.base import filter_persons
 from posthog.queries.lifecycle import LifecycleTrend
 from posthog.queries.retention import Retention
 from posthog.queries.stickiness import Stickiness
 from posthog.tasks.split_person import split_person
-from posthog.utils import convert_property_value, get_safe_cache, is_anonymous_id, relative_date_parse
+from posthog.utils import convert_property_value, is_anonymous_id, relative_date_parse
 
 
 class PersonCursorPagination(CursorPagination):
     ordering = "-id"
     page_size = 100
+
+
+def get_person_name(person: Person) -> str:
+    if person.properties.get("email"):
+        return person.properties["email"]
+    if len(person.distinct_ids) > 0:
+        # Prefer non-UUID distinct IDs (presumably from user identification) over UUIDs
+        return sorted(person.distinct_ids, key=is_anonymous_id)[0]
+    return person.pk
 
 
 class PersonSerializer(serializers.HyperlinkedModelSerializer):
@@ -41,18 +50,12 @@ class PersonSerializer(serializers.HyperlinkedModelSerializer):
             "name",
             "distinct_ids",
             "properties",
-            "is_identified",
             "created_at",
             "uuid",
         ]
 
     def get_name(self, person: Person) -> str:
-        if person.properties.get("email"):
-            return person.properties["email"]
-        if len(person.distinct_ids) > 0:
-            # Prefer non-UUID distinct IDs (presumably from user identification) over UUIDs
-            return sorted(person.distinct_ids, key=is_anonymous_id)[0]
-        return person.pk
+        return get_person_name(person)
 
     def to_representation(self, instance: Person) -> Dict[str, Any]:
         representation = super().to_representation(instance)
@@ -73,7 +76,7 @@ class PersonFilter(filters.FilterSet):
 
     class Meta:
         model = Person
-        fields = ["is_identified"]
+        fields = ["email"]
 
 
 class PersonViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
@@ -209,11 +212,12 @@ class PersonViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
                 status=400,
             )
         filter = RetentionFilter(request=request)
+        base_uri = request.build_absolute_uri("/")
 
         if display == TRENDS_TABLE:
-            people = self.retention_class().people_in_period(filter, team)
+            people = self.retention_class(base_uri=base_uri).people_in_period(filter, team)
         else:
-            people = self.retention_class().people(filter, team)
+            people = self.retention_class(base_uri=base_uri).people(filter, team)
 
         next_url = paginated_result(people, request, filter.offset)
 
@@ -229,6 +233,8 @@ class PersonViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
             )
         earliest_timestamp_func = lambda team_id: Event.objects.earliest_timestamp(team_id)
         filter = StickinessFilter(request=request, team=team, get_earliest_timestamp=earliest_timestamp_func)
+        if not filter.limit:
+            filter = filter.with_data({LIMIT: 100})
 
         target_entity = get_target_entity(request)
 
@@ -249,7 +255,7 @@ class PersonViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
 def paginated_result(
     entites: Union[List[Dict[str, Any]], ReturnDict], request: request.Request, offset: int = 0,
 ) -> Optional[str]:
-    return format_next_url(request, offset, 100) if len(entites) > 99 else None
+    return format_paginated_url(request, offset, 100) if len(entites) > 99 else None
 
 
 class LegacyPersonViewSet(PersonViewSet):

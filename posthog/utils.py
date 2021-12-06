@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import datetime
 import datetime as dt
 import gzip
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import time
 import uuid
+from enum import Enum
 from itertools import count
 from typing import (
     Any,
@@ -241,18 +243,22 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
     context["js_capture_internal_metrics"] = settings.CAPTURE_INTERNAL_METRICS
     context["js_url"] = settings.JS_URL
 
+    posthog_app_context: Dict[str, Any] = {
+        "persisted_feature_flags": settings.PERSISTED_FEATURE_FLAGS,
+    }
+
     # Set the frontend app context
     if not request.GET.get("no-preloaded-app-context"):
         from posthog.api.team import TeamSerializer
         from posthog.api.user import User, UserSerializer
         from posthog.views import preflight_check
 
-        posthog_app_context: Dict[str, Any] = {
+        posthog_app_context = {
             "current_user": None,
             "current_team": None,
             "preflight": json.loads(preflight_check(request).getvalue()),
             "default_event_name": get_default_event_name(),
-            "persisted_feature_flags": settings.PERSISTED_FEATURE_FLAGS,
+            **posthog_app_context,
         }
 
         if request.user.pk:
@@ -263,9 +269,7 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
                 team_serialized = TeamSerializer(team, context={"request": request}, many=False)
                 posthog_app_context["current_team"] = team_serialized.data
 
-        context["posthog_app_context"] = json.dumps(posthog_app_context, default=json_uuid_convert)
-    else:
-        context["posthog_app_context"] = "null"
+    context["posthog_app_context"] = json.dumps(posthog_app_context, default=json_uuid_convert)
 
     html = template.render(context, request=request)
     return HttpResponse(html)
@@ -305,9 +309,9 @@ def friendly_time(seconds: float):
     minutes, seconds = divmod(seconds, 60.0)
     hours, minutes = divmod(minutes, 60.0)
     return "{hours}{minutes}{seconds}".format(
-        hours="{h} hours ".format(h=int(hours)) if hours > 0 else "",
-        minutes="{m} minutes ".format(m=int(minutes)) if minutes > 0 else "",
-        seconds="{s} seconds".format(s=int(seconds)) if seconds > 0 or (minutes == 0 and hours == 0) else "",
+        hours=f"{int(hours)} hours " if hours > 0 else "",
+        minutes=f"{int(minutes)} minutes " if minutes > 0 else "",
+        seconds=f"{int(seconds)} seconds" if seconds > 0 or (minutes == 0 and hours == 0) else "",
     ).strip()
 
 
@@ -334,7 +338,7 @@ def append_data(dates_filled: List, interval=None, math="sum") -> Dict[str, Any]
 
 
 def get_ip_address(request: HttpRequest) -> str:
-    """ use requestobject to fetch client machine's IP Address """
+    """use requestobject to fetch client machine's IP Address"""
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
         ip = x_forwarded_for.split(",")[0]
@@ -371,7 +375,7 @@ def cors_response(request, response):
     if not request.META.get("HTTP_ORIGIN"):
         return response
     url = urlparse(request.META["HTTP_ORIGIN"])
-    response["Access-Control-Allow-Origin"] = "%s://%s" % (url.scheme, url.netloc)
+    response["Access-Control-Allow-Origin"] = f"{url.scheme}://{url.netloc}"
     response["Access-Control-Allow-Credentials"] = "true"
     response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response["Access-Control-Allow-Headers"] = "X-Requested-With"
@@ -516,12 +520,12 @@ def compact_number(value: Union[int, float]) -> str:
     """Return a number in a compact format, with a SI suffix if applicable.
     Client-side equivalent: utils.tsx#compactNumber.
     """
-    value = float("{:.3g}".format(value))
+    value = float(f"{value:.3g}")
     magnitude = 0
     while abs(value) >= 1000:
         magnitude += 1
         value /= 1000.0
-    return "{:f}".format(value).rstrip("0").rstrip(".") + ["", "K", "M", "B", "T", "P", "E", "Z", "Y"][magnitude]
+    return f"{value:f}".rstrip("0").rstrip(".") + ["", "K", "M", "B", "T", "P", "E", "Z", "Y"][magnitude]
 
 
 def is_postgres_alive() -> bool:
@@ -817,7 +821,9 @@ def str_to_bool(value: Any) -> bool:
 
 def print_warning(warning_lines: Sequence[str]):
     highlight_length = min(max(map(len, warning_lines)) // 2, shutil.get_terminal_size().columns)
-    print("\n".join(("", "🔻" * highlight_length, *warning_lines, "🔺" * highlight_length, "",)), file=sys.stderr)
+    print(
+        "\n".join(("", "🔻" * highlight_length, *warning_lines, "🔺" * highlight_length, "",)), file=sys.stderr,
+    )
 
 
 def get_helm_info_env() -> dict:
@@ -859,3 +865,28 @@ def format_query_params_absolute_url(
 
 def get_milliseconds_between_dates(d1: dt.datetime, d2: dt.datetime) -> int:
     return abs(int((d1 - d2).total_seconds() * 1000))
+
+
+def encode_get_request_params(data: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        key: encode_value_as_param(value=value)
+        for key, value in data.items()
+        # NOTE: we cannot encode `None` as a GET parameter, so we simply omit it
+        if value is not None
+    }
+
+
+class DataclassJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        return super().default(o)
+
+
+def encode_value_as_param(value: Union[str, list, dict]) -> str:
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, cls=DataclassJSONEncoder)
+    elif isinstance(value, Enum):
+        return value.value
+    else:
+        return value

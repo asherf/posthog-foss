@@ -1,4 +1,15 @@
-from typing import Any, Optional, Tuple
+import json
+from enum import Enum, auto
+from typing import (
+    Any,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 from rest_framework import request, status
 from sentry_sdk import capture_exception
@@ -7,37 +18,80 @@ from statshog.defaults.django import statsd
 from posthog.constants import ENTITY_ID, ENTITY_MATH, ENTITY_TYPE
 from posthog.exceptions import RequestParsingError, generate_exception_response
 from posthog.models import Entity
+from posthog.models.entity import MATH_TYPE
 from posthog.models.team import Team
 from posthog.models.user import User
 from posthog.utils import cors_response, is_clickhouse_enabled, load_data_from_request
 
 
-def get_target_entity(request: request.Request) -> Entity:
-    entity_id = request.GET.get(ENTITY_ID)
-    entity_type = request.GET.get(ENTITY_TYPE)
-    entity_math = request.GET.get(ENTITY_MATH, None)
+class PaginationMode(Enum):
+    next = auto()
+    previous = auto()
 
-    if entity_id and entity_type:
+
+def get_target_entity(request: request.Request) -> Entity:
+    entity_id: Optional[str] = request.GET.get(ENTITY_ID)
+    events = request.GET.get("events", "[]")
+    actions = request.GET.get("actions", "[]")
+    entity_type = request.GET.get(ENTITY_TYPE)
+    entity_math = cast(MATH_TYPE, request.GET.get(ENTITY_MATH, "total"))
+
+    if not entity_id:
+        raise ValueError("An entity id and the entity type must be provided to determine an entity")
+
+    possible_entity = retrieve_entity_from(entity_id, entity_type, entity_math, json.loads(events), json.loads(actions))
+    if possible_entity:
+        return Entity(data=possible_entity)
+    elif entity_type:
         return Entity({"id": entity_id, "type": entity_type, "math": entity_math})
     else:
         raise ValueError("An entity must be provided for target entity to be determined")
 
 
-def format_next_url(request: request.Request, offset: int, page_size: int):
-    next_url = request.get_full_path()
-    if not next_url:
+def retrieve_entity_from(
+    entity_id: str, entity_type: Optional[str], entity_math: MATH_TYPE, events: List[Dict], actions: List[Dict]
+) -> Optional[Dict]:
+    """
+    Retrieves the entity from the events and actions.
+
+    NOTE: entity_id here is considered always to be a string. event ids are
+    strings, and action ids are ints. Elsewhere we get the `entity_id` from a
+    get request, from which we do not get type information, and we do not
+    require the entity type to be provided. A more complete solution might be to
+    require entity type information, but to resolve the issue we cast the action
+    id to a string, such that we can get equality.
+
+    This doesn't preclude ths issue that an event name could be a string that is
+    also a valid number however, but this should be an unlikely occurance.
+    """
+
+    if entity_type == "actions":
+        for action in actions:
+            if str(action.get("id")) == entity_id and action.get("math", "total") == entity_math:
+                return action
+    else:
+        for event in events:
+            if event.get("id") == entity_id and event.get("math", "total") == entity_math:
+                return event
+    return None
+
+
+def format_paginated_url(request: request.Request, offset: int, page_size: int, mode=PaginationMode.next):
+    result = request.get_full_path()
+    if not result:
         return None
 
-    new_offset = str(offset + page_size)
+    new_offset = offset - page_size if mode == PaginationMode.previous else offset + page_size
 
-    if "offset" in next_url:
-        next_url = next_url[1:]
-        next_url = next_url.replace(f"offset={str(offset)}", f"offset={new_offset}")
+    if new_offset < 0:
+        return None
+
+    if "offset" in result:
+        result = result[1:]
+        result = result.replace(f"offset={offset}", f"offset={new_offset}")
     else:
-        next_url = request.build_absolute_uri(
-            "{}{}offset={}".format(next_url, "&" if "?" in next_url else "?", offset + page_size)
-        )
-    return next_url
+        result = request.build_absolute_uri("{}{}offset={}".format(result, "&" if "?" in result else "?", new_offset))
+    return result
 
 
 def get_token(data, request) -> Optional[str]:

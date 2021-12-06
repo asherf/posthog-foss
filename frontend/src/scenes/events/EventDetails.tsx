@@ -1,16 +1,15 @@
 import React, { useState } from 'react'
 import { keyMapping } from 'lib/components/PropertyKeyInfo'
 import { PropertiesTable } from 'lib/components/PropertiesTable'
-import dayjs from 'dayjs'
 import { EventElements } from 'scenes/events/EventElements'
 import { Tabs, Button } from 'antd'
-
 import { createActionFromEvent } from './createActionFromEvent'
 import { EventJSON } from 'scenes/events/EventJSON'
 import { EventType } from '../../types'
 import { Properties } from '@posthog/plugin-scaffold'
 import { useValues } from 'kea'
 import { teamLogic } from '../teamLogic'
+import { dayjs } from 'lib/dayjs'
 
 const { TabPane } = Tabs
 
@@ -39,7 +38,7 @@ export function EventDetails({ event }: { event: EventType }): JSX.Element {
             {currentTeamId && (
                 <Button
                     onClick={() => createActionFromEvent(currentTeamId, event, 0)}
-                    style={{ float: 'right', zIndex: 1 }}
+                    style={{ float: 'right', zIndex: 1, marginTop: 8 }}
                     type="primary"
                 >
                     Create action from event
@@ -47,10 +46,10 @@ export function EventDetails({ event }: { event: EventType }): JSX.Element {
             )}
 
             <Tabs
-                style={{ float: 'left', width: '100%', marginTop: -40 }}
                 data-attr="event-details"
                 defaultActiveKey="properties"
-                animated={false}
+                style={{ float: 'left', width: '100%', marginTop: -38 }}
+                tabBarStyle={{ margin: 0 }}
             >
                 <TabPane tab="Properties" key="properties">
                     <PropertiesTable

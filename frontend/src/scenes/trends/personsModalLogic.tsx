@@ -1,31 +1,32 @@
 import React from 'react'
 import { Link } from 'lib/components/Link'
-import dayjs from 'dayjs'
 import { kea } from 'kea'
 import { router } from 'kea-router'
 import api, { PaginatedResponse } from 'lib/api'
-import { errorToast, toParams } from 'lib/utils'
+import { errorToast, isGroupType, pluralize, toParams } from 'lib/utils'
 import {
     ActionFilter,
     FilterType,
     InsightType,
     FunnelVizType,
     PropertyFilter,
-    PersonType,
     FunnelCorrelationResultsType,
+    ActorType,
 } from '~/types'
 import { personsModalLogicType } from './personsModalLogicType'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 
-import { TrendPeople } from 'scenes/trends/types'
+import { TrendActors } from 'scenes/trends/types'
 import { cleanFilters } from 'scenes/insights/utils/cleanFilters'
 import { filterTrendsClientSideParams } from 'scenes/insights/sharedUtils'
 import { ACTIONS_LINE_GRAPH_CUMULATIVE } from 'lib/constants'
 import { toast } from 'react-toastify'
 import { cohortsModel } from '~/models/cohortsModel'
+import { dayjs } from 'lib/dayjs'
+import { groupsModel } from '~/models/groupsModel'
 
-export interface PersonModalParams {
+export interface PersonsModalParams {
     action: ActionFilter | 'session' // todo, refactor this session string param out
     label: string // Contains the step name
     date_from: string | number
@@ -87,24 +88,52 @@ export function parsePeopleParams(peopleParams: PeopleParamType, filters: Partia
     return toParams({ ...params, ...restParams })
 }
 
-export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
+// Props for the `loadPeopleFromUrl` action.
+// NOTE: this interface isn't particularly clean. Separation of concerns of load
+// and displaying of people and the display of the modal would be helpful to
+// keep this interfaces smaller.
+type LoadPeopleFromUrlProps = {
+    // The url from which we can load urls
+    url: string
+    // The funnel step the dialog should display as the complete/dropped step.
+    // Optional as this call signature includes any parameter from any insght type
+    funnelStep?: number
+    // Used to display in the modal title the property value we're filtering
+    // with
+    breakdown_value?: string | number // NOTE: using snake case to be consistent with the rest of the file
+    // This label is used in the modal title. It's usage depends on the
+    // filter.insight attribute. For insight=FUNNEL we use it as a person
+    // property name
+    label: string
+    // Needed for display
+    date_from?: string | number
+    // Copied from `PersonsModalParams`, likely needed for display logic
+    action: ActionFilter | 'session'
+    // Copied from `PersonsModalParams`, likely needed for diplay logic
+    pathsDropoff?: boolean
+}
+
+export const personsModalLogic = kea<personsModalLogicType<LoadPeopleFromUrlProps, PersonsModalParams>>({
     path: ['scenes', 'trends', 'personsModalLogic'],
     actions: () => ({
         setSearchTerm: (term: string) => ({ term }),
         setCohortModalVisible: (visible: boolean) => ({ visible }),
-        loadPeople: (peopleParams: PersonModalParams) => ({ peopleParams }),
+        loadPeople: (peopleParams: PersonsModalParams) => ({ peopleParams }),
+        loadPeopleFromUrl: (props: LoadPeopleFromUrlProps) => props,
         loadMorePeople: true,
         hidePeople: true,
         saveCohortWithFilters: (cohortName: string, filters: Partial<FilterType>) => ({ cohortName, filters }),
-        setPersonsModalFilters: (searchTerm: string, people: TrendPeople, filters: Partial<FilterType>) => ({
+        setPersonsModalFilters: (searchTerm: string, people: TrendActors, filters: Partial<FilterType>) => ({
             searchTerm,
             people,
             filters,
         }),
-        saveFirstLoadedPeople: (people: TrendPeople) => ({ people }),
-        setFirstLoadedPeople: (firstLoadedPeople: TrendPeople | null) => ({ firstLoadedPeople }),
-        savePeopleParams: (peopleParams: PersonModalParams) => ({ peopleParams }),
+        saveFirstLoadedActors: (people: TrendActors) => ({ people }),
+        setFirstLoadedActors: (firstLoadedPeople: TrendActors | null) => ({ firstLoadedPeople }),
     }),
+    connect: {
+        values: [groupsModel, ['groupTypes']],
+    },
     reducers: () => ({
         searchTerm: [
             '',
@@ -120,7 +149,7 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
             },
         ],
         people: [
-            null as TrendPeople | null,
+            null as TrendActors | null,
             {
                 loadPeople: (_, { peopleParams: { action, label, date_from, breakdown_value } }) => ({
                     people: [],
@@ -130,7 +159,7 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                     day: date_from,
                     breakdown_value,
                 }),
-                loadPeopleFromUrl: (_, { label, date_from, action, breakdown_value }) => ({
+                loadPeopleFromUrl: (_, { label, date_from = '', action, breakdown_value }) => ({
                     people: [],
                     count: 0,
                     day: date_from,
@@ -139,13 +168,13 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                     breakdown_value,
                 }),
                 setFilters: () => null,
-                setFirstLoadedPeople: (_, { firstLoadedPeople }) => firstLoadedPeople,
+                setFirstLoadedActors: (_, { firstLoadedPeople }) => firstLoadedPeople,
             },
         ],
         firstLoadedPeople: [
-            null as TrendPeople | null,
+            null as TrendActors | null,
             {
-                saveFirstLoadedPeople: (_, { people }) => people,
+                saveFirstLoadedActors: (_, { people }) => people,
             },
         ],
         loadingMorePeople: [
@@ -165,7 +194,7 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
             },
         ],
         peopleParams: [
-            null as PersonModalParams | null,
+            null as PersonsModalParams | null,
             {
                 loadPeople: (_, { peopleParams }) => peopleParams,
             },
@@ -180,12 +209,26 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
             () => [preflightLogic.selectors.preflight],
             (preflight) => !!preflight?.is_clickhouse_enabled,
         ],
+        isGroupType: [(s) => [s.people], (people) => people?.people?.[0] && isGroupType(people.people[0])],
+        actorLabel: [
+            (s) => [s.people, s.isGroupType, s.groupTypes],
+            (result, _isGroupType, groupTypes) => {
+                if (_isGroupType && result?.action !== 'session') {
+                    return result?.action.math_group_type_index != undefined &&
+                        groupTypes.length > result?.action.math_group_type_index
+                        ? `${groupTypes[result?.action.math_group_type_index].group_type}(s)`
+                        : ''
+                } else {
+                    return pluralize(result?.count || 0, 'user', undefined, false)
+                }
+            },
+        ],
     },
     loaders: ({ actions, values }) => ({
         people: {
             loadPeople: async ({ peopleParams }, breakpoint) => {
-                let people: PaginatedResponse<{
-                    people: PersonType[]
+                let actors: PaginatedResponse<{
+                    people: ActorType[]
                     count: number
                 }> | null = null
                 const {
@@ -205,19 +248,19 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
 
                 if (filters.funnel_correlation_person_entity) {
                     const cleanedParams = cleanFilters(filters)
-                    people = await api.create(`api/person/funnel/correlation/?${searchTermParam}`, cleanedParams)
+                    actors = await api.create(`api/person/funnel/correlation/?${searchTermParam}`, cleanedParams)
                 } else if (filters.insight === InsightType.LIFECYCLE) {
                     const filterParams = parsePeopleParams(
                         { label, action, target_date: date_from, lifecycle_type: breakdown_value },
                         filters
                     )
-                    people = await api.get(`api/person/lifecycle/?${filterParams}${searchTermParam}`)
+                    actors = await api.get(`api/person/lifecycle/?${filterParams}${searchTermParam}`)
                 } else if (filters.insight === InsightType.STICKINESS) {
                     const filterParams = parsePeopleParams(
                         { label, action, date_from, date_to, breakdown_value },
                         filters
                     )
-                    people = await api.get(`api/person/stickiness/?${filterParams}${searchTermParam}`)
+                    actors = await api.get(`api/person/stickiness/?${filterParams}${searchTermParam}`)
                 } else if (funnelStep || filters.funnel_viz_type === FunnelVizType.Trends) {
                     let params
                     if (filters.funnel_viz_type === FunnelVizType.Trends) {
@@ -243,12 +286,12 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                     }
                     const cleanedParams = cleanFilters(params)
                     const funnelParams = toParams(cleanedParams)
-                    people = await api.create(`api/person/funnel/?${funnelParams}${searchTermParam}`)
+                    actors = await api.create(`api/person/funnel/?${funnelParams}${searchTermParam}`)
                 } else if (filters.insight === InsightType.PATHS) {
                     const cleanedParams = cleanFilters(filters)
-                    people = await api.create(`api/person/path/?${searchTermParam}`, cleanedParams)
+                    actors = await api.create(`api/person/path/?${searchTermParam}`, cleanedParams)
                 } else {
-                    people = await api.actions.getPeople(
+                    actors = await api.actions.getPeople(
                         { label, action, date_from, date_to, breakdown_value },
                         filters,
                         searchTerm
@@ -256,21 +299,21 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                 }
                 breakpoint()
                 const peopleResult = {
-                    people: people?.results[0]?.people,
-                    count: people?.results[0]?.count || 0,
+                    people: actors?.results[0]?.people,
+                    count: actors?.results[0]?.count || 0,
                     action,
                     label,
                     day: date_from,
                     breakdown_value,
-                    next: people?.next,
+                    next: actors?.next,
                     funnelStep,
                     pathsDropoff,
-                } as TrendPeople
+                } as TrendActors
 
-                eventUsageLogic.actions.reportPersonModalViewed(peopleParams, peopleResult.count, !!people?.next)
+                eventUsageLogic.actions.reportPersonsModalViewed(peopleParams, peopleResult.count, !!actors?.next)
 
                 if (saveOriginal) {
-                    actions.saveFirstLoadedPeople(peopleResult)
+                    actions.saveFirstLoadedActors(peopleResult)
                 }
 
                 return peopleResult
@@ -279,7 +322,7 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
                 url,
                 funnelStep,
                 breakdown_value = '',
-                date_from,
+                date_from = '',
                 action,
                 label,
                 pathsDropoff,
@@ -393,7 +436,7 @@ export const personsModalLogic = kea<personsModalLogicType<PersonModalParams>>({
         },
     }),
     urlToAction: ({ actions, values }) => ({
-        '/insights': (_, {}, { personModal }) => {
+        '/insights/': (_, {}, { personModal }) => {
             if (personModal && !values.showingPeople) {
                 actions.loadPeople(personModal)
             }

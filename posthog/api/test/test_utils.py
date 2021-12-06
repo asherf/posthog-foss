@@ -1,14 +1,15 @@
 import json
+from typing import Any, cast
 from unittest.mock import patch
 
 from django.http import HttpRequest
 from django.http.response import JsonResponse
+from django.test.client import RequestFactory
 from rest_framework import status
 
 from posthog.api.test.test_capture import mocked_get_team_from_token
-from posthog.api.utils import get_data, get_team
+from posthog.api.utils import PaginationMode, format_paginated_url, get_data, get_target_entity, get_team
 from posthog.test.base import BaseTest
-from posthog.utils import load_data_from_request
 
 
 def return_true():
@@ -70,3 +71,46 @@ class TestUtils(BaseTest):
         data, error_response = get_data(request)
         self.assertEqual(data, {"event": "some event"})
         self.assertEqual(error_response, None)
+
+    def test_format_paginated_url(self):
+        request = lambda url: cast(Any, RequestFactory().get(url))
+
+        self.assertEqual(
+            format_paginated_url(request("/api/some_url"), offset=0, page_size=10),
+            "http://testserver/api/some_url?offset=10",
+        )
+        self.assertEqual(
+            format_paginated_url(request("/api/some_url?offset=0"), offset=0, page_size=10), "api/some_url?offset=10"
+        )
+        self.assertEqual(
+            format_paginated_url(
+                request("/api/some_url?offset=0"), offset=0, page_size=10, mode=PaginationMode.previous
+            ),
+            None,
+        )
+        self.assertEqual(
+            format_paginated_url(
+                request("/api/some_url?offset=0"), offset=20, page_size=10, mode=PaginationMode.previous
+            ),
+            "api/some_url?offset=0",
+        )
+
+    def test_get_target_entity(self):
+        request = lambda url: cast(Any, RequestFactory().get(url))
+        first_request = request(
+            f"/api/?entity_id=$pageview&entity_type=events&events={json.dumps([{'id': '$pageview', 'type': 'events'}])}"
+        )
+        entity = get_target_entity(first_request)
+
+        assert entity.id == "$pageview"
+        assert entity.type == "events"
+        assert entity.math == None
+
+        second_request = request(
+            f"/api/?entity_id=$pageview&entity_type=events&entity_math=unique_group&events={json.dumps([{'id': '$pageview', 'type': 'events', 'math': 'unique_group'}, {'id': '$pageview', 'type': 'events'}])}"
+        )
+        entity = get_target_entity(second_request)
+
+        assert entity.id == "$pageview"
+        assert entity.type == "events"
+        assert entity.math == "unique_group"

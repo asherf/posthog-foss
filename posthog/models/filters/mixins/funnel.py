@@ -1,6 +1,6 @@
 import datetime
 import json
-from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Union
 
 from posthog.models.property import Property
 
@@ -143,10 +143,11 @@ class FunnelPersonsStepMixin(BaseParamMixin):
         Specifies the step index within a funnel entities definition for which
         we want to get the `timestamp` for, per person.
         """
-        _step = int(self._data.get(FUNNEL_STEP, "0"))
-        if _step == 0:
+        _step_as_string = self._data.get(FUNNEL_STEP)
+
+        if _step_as_string is None:
             return None
-        return _step
+        return int(_step_as_string)
 
     @cached_property
     def funnel_custom_steps(self) -> List[int]:
@@ -162,7 +163,7 @@ class FunnelPersonsStepMixin(BaseParamMixin):
     @include_dict
     def funnel_step_to_dict(self):
         result: dict = {}
-        if self.funnel_step:
+        if self.funnel_step is not None:
             result[FUNNEL_STEP] = self.funnel_step
         if self.funnel_custom_steps:
             result[FUNNEL_CUSTOM_STEPS] = self.funnel_custom_steps
@@ -171,11 +172,25 @@ class FunnelPersonsStepMixin(BaseParamMixin):
 
 class FunnelPersonsStepBreakdownMixin(BaseParamMixin):
     @cached_property
-    def funnel_step_breakdown(self) -> Optional[Union[str, int]]:
+    def funnel_step_breakdown(self) -> Optional[Union[List[str], int, str]]:
         """
         The breakdown value for which to get persons for.
+
+        For person and event properties as this value is set within the funnel it is always an array.
+        Until multi property breakdowns is released it is always a single value array
+
+        for groups it is always a string
+
+        for cohorts it is always an int
         """
-        return self._data.get(FUNNEL_STEP_BREAKDOWN)
+        raw: Optional[str] = self._data.get(FUNNEL_STEP_BREAKDOWN)
+        if not raw:
+            return raw
+
+        try:
+            return json.loads(raw)
+        except (TypeError, json.decoder.JSONDecodeError):
+            return raw
 
     @include_dict
     def funnel_person_breakdown_to_dict(self):
@@ -322,7 +337,7 @@ class FunnelCorrelationMixin(BaseParamMixin):
         return result_dict
 
 
-class FunnelCorrelationPersonsMixin(BaseParamMixin):
+class FunnelCorrelationActorsMixin(BaseParamMixin):
     @cached_property
     def correlation_person_entity(self) -> Optional["Entity"]:
         # Used for event & event_with_properties correlations persons

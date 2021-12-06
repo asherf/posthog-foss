@@ -10,6 +10,7 @@ from .event import Event
 from .event_definition import EventDefinition
 from .feature_flag import FeatureFlag
 from .filters import Filter, RetentionFilter
+from .group import Group
 from .group_type_mapping import GroupTypeMapping
 from .insight import Insight
 from .messaging import MessagingRecord
@@ -20,7 +21,6 @@ from .plugin import Plugin, PluginAttachment, PluginConfig, PluginLogEntry
 from .property import Property
 from .property_definition import PropertyDefinition
 from .session_recording_event import SessionRecordingEvent
-from .sessions_filter import SessionsFilter
 from .team import Team
 from .user import User, UserManager
 
@@ -39,6 +39,7 @@ __all__ = [
     "EventDefinition",
     "FeatureFlag",
     "Filter",
+    "Group",
     "GroupTypeMapping",
     "RetentionFilter",
     "MessagingRecord",
@@ -55,7 +56,6 @@ __all__ = [
     "Property",
     "PropertyDefinition",
     "SessionRecordingEvent",
-    "SessionsFilter",
     "Team",
     "User",
     "UserManager",
